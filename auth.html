@@ -56,7 +56,33 @@
     <div id="step-login" style="display:none;">
       <div class="form-group"><label>Telefone ou e-mail</label><input type="text" id="login-id" placeholder="Contato cadastrado"></div>
       <button type="button" class="btn btn-primary btn-block" onclick="doLogin()">Entrar</button>
+      <p class="hint"><a href="#" onclick="showRecover();return false;">Esqueci meu acesso</a></p>
       <p class="hint">Novo? <a href="#" onclick="showRegister();return false;">Criar cadastro</a></p>
+    </div>
+
+    <div id="step-recover" style="display:none;">
+      <p class="sub">Recuperar acesso</p>
+      <div class="form-group"><label>Telefone ou e-mail cadastrado</label>
+        <input type="text" id="recover-contact" placeholder="Contato do cadastro">
+      </div>
+      <button type="button" class="btn btn-primary btn-block" onclick="startRecover()">Receber código</button>
+      <button type="button" class="btn btn-outline btn-block" style="margin-top:8px;" onclick="showLogin()">Voltar</button>
+    </div>
+
+    <div id="step-recover-code" style="display:none;">
+      <p class="sub">Digite o código e defina uma nova senha (opcional)</p>
+      <div class="demo-code">📱 Código (demonstração): <strong id="recover-demo-code">----</strong></div>
+      <div class="code-inputs">
+        <input maxlength="1" id="r1" inputmode="numeric" oninput="nextCode(this,'r2')">
+        <input maxlength="1" id="r2" inputmode="numeric" oninput="nextCode(this,'r3')">
+        <input maxlength="1" id="r3" inputmode="numeric" oninput="nextCode(this,'r4')">
+        <input maxlength="1" id="r4" inputmode="numeric">
+      </div>
+      <div class="form-group"><label>Nova senha (opcional)</label>
+        <input type="password" id="recover-new-pass" placeholder="Mínimo 4 caracteres">
+      </div>
+      <button type="button" class="btn btn-primary btn-block" onclick="confirmRecover()">Confirmar e entrar</button>
+      <button type="button" class="btn btn-outline btn-block" style="margin-top:8px;" onclick="showRecover()">Voltar</button>
     </div>
   </div>
 </div>
@@ -72,15 +98,52 @@ function switchTab(t) {
   document.getElementById("fields-phone").style.display = t === "phone" ? "block" : "none";
   document.getElementById("fields-email").style.display = t === "email" ? "block" : "none";
 }
+function hideAllAuthSteps() {
+  ["step-register","step-code","step-login","step-recover","step-recover-code"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = "none";
+  });
+}
 function showRegister() {
+  hideAllAuthSteps();
   document.getElementById("step-register").style.display = "block";
-  document.getElementById("step-code").style.display = "none";
-  document.getElementById("step-login").style.display = "none";
 }
 function showLogin() {
-  document.getElementById("step-register").style.display = "none";
-  document.getElementById("step-code").style.display = "none";
+  hideAllAuthSteps();
   document.getElementById("step-login").style.display = "block";
+}
+function showRecover() {
+  hideAllAuthSteps();
+  document.getElementById("step-recover").style.display = "block";
+}
+let recoverContact = "";
+async function startRecover() {
+  const contact = document.getElementById("recover-contact").value.trim();
+  if (!contact) return alert("Informe telefone ou e-mail");
+  const res = await fetch("/api/recover", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({contact})
+  });
+  const data = await res.json();
+  if (!data.ok) return alert(data.error || "Erro");
+  recoverContact = data.contact || contact;
+  document.getElementById("recover-demo-code").textContent = data.demo_code;
+  hideAllAuthSteps();
+  document.getElementById("step-recover-code").style.display = "block";
+}
+async function confirmRecover() {
+  const code = ["r1","r2","r3","r4"].map(id => document.getElementById(id).value).join("");
+  if (code.length < 4) return alert("Digite o código completo");
+  const new_password = document.getElementById("recover-new-pass").value.trim();
+  const res = await fetch("/api/recover/confirm", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({contact: recoverContact, code, new_password})
+  });
+  const data = await res.json();
+  if (!data.ok) return alert(data.error || "Código inválido");
+  window.location.href = "/";
 }
 function nextCode(el, next) {
   if (el.value && next) document.getElementById(next).focus();

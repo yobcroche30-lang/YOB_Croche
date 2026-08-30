@@ -4,14 +4,66 @@
 <div class="container">
   <div class="login-box">
     <h2>Painel Admin</h2>
-    <form method="post">
-      <div class="form-group">
-        <label>Senha</label>
-        <input type="password" name="password" required placeholder="Senha admin">
-      </div>
-      <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+
+    <div id="admin-login-form">
+      <form method="post">
+        <div class="form-group">
+          <label>Senha</label>
+          <input type="password" name="password" required placeholder="Senha admin">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+      </form>
+      <p class="hint" style="margin-top:14px;">
+        <a href="#" onclick="showAdminRecover();return false;">Esqueci a senha do admin</a>
+      </p>
       <p class="hint">Acesso restrito — apenas responsáveis autorizados</p>
-    </form>
+    </div>
+
+    <div id="admin-recover-form" style="display:none;">
+      <p class="sub">Recuperar senha do administrador</p>
+      <div class="form-group">
+        <label>Código de recuperação</label>
+        <input type="password" id="admin-recovery-code" placeholder="Código de recuperação">
+      </div>
+      <div class="form-group">
+        <label>Nova senha</label>
+        <input type="password" id="admin-new-password" placeholder="Mínimo 4 caracteres">
+      </div>
+      <div class="form-group">
+        <label>Confirmar nova senha</label>
+        <input type="password" id="admin-new-password2" placeholder="Repita a nova senha">
+      </div>
+      <button type="button" class="btn btn-primary btn-block" onclick="doAdminRecover()">Salvar nova senha</button>
+      <button type="button" class="btn btn-outline btn-block" style="margin-top:8px;" onclick="hideAdminRecover()">Voltar</button>
+      <p class="hint" style="margin-top:12px;">Código padrão de recuperação: yob-recovery-2026 (ou o valor de ADMIN_RECOVERY_CODE no Render)</p>
+    </div>
   </div>
 </div>
+<script>
+function showAdminRecover() {
+  document.getElementById("admin-login-form").style.display = "none";
+  document.getElementById("admin-recover-form").style.display = "block";
+}
+function hideAdminRecover() {
+  document.getElementById("admin-login-form").style.display = "block";
+  document.getElementById("admin-recover-form").style.display = "none";
+}
+async function doAdminRecover() {
+  const recovery_code = document.getElementById("admin-recovery-code").value.trim();
+  const new_password = document.getElementById("admin-new-password").value.trim();
+  const p2 = document.getElementById("admin-new-password2").value.trim();
+  if (!recovery_code) return alert("Informe o código de recuperação");
+  if (new_password.length < 4) return alert("Nova senha com no mínimo 4 caracteres");
+  if (new_password !== p2) return alert("As senhas não conferem");
+  const res = await fetch("/api/admin/recover", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({recovery_code, new_password})
+  });
+  const data = await res.json();
+  if (!data.ok) return alert(data.error || "Não foi possível recuperar");
+  alert("Senha atualizada! Entrando no painel...");
+  window.location.href = "/admin";
+}
+</script>
 {% endblock %}

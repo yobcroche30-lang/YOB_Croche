@@ -43,6 +43,7 @@ ADMIN_PASSWORDS = set(
     if p.strip()
 )
 MAX_ADMIN_ATTEMPTS = 5
+ADMIN_RECOVERY_CODE = os.environ.get("ADMIN_RECOVERY_CODE", "yob-recovery-2026")
 WHATSAPP = os.environ.get("WHATSAPP", "5511999999999")
 
 # No Render a pasta pode ser só leitura — usa /tmp se precisar
@@ -114,6 +115,12 @@ def init_db():
         )
     """)
     c.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+    c.execute("""
         CREATE TABLE IF NOT EXISTS orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             customer_id INTEGER,
@@ -176,6 +183,48 @@ def customer_required(f):
             return redirect(url_for("auth"))
         return f(*args, **kwargs)
     return wrapped
+
+
+
+def get_setting(key, default=None):
+    conn = get_db()
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    conn.close()
+    return row["value"] if row else default
+
+
+def set_setting(key, value):
+    conn = get_db()
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        (key, value),
+    )
+    conn.commit()
+    conn.close()
+
+
+def check_admin_password(pwd):
+    """Valida senha admin (banco ou variáveis de ambiente)."""
+    stored = get_setting("admin_password_hash")
+    if stored:
+        return check_password_hash(stored, pwd)
+    return pwd in ADMIN_PASSWORDS
+
+
+def find_customer(contact):
+    conn = get_db()
+    cust = conn.execute(
+        "SELECT * FROM customers WHERE contact=?", (contact,)
+    ).fetchone()
+    if not cust:
+        digits = "".join(filter(str.isdigit, contact))
+        if digits:
+            for r in conn.execute("SELECT * FROM customers").fetchall():
+                if "".join(filter(str.isdigit, r["contact"])) == digits:
+                    cust = r
+                    break
+    conn.close()
+    return cust
 
 
 @app.before_request
@@ -313,6 +362,86 @@ def api_login():
     session["customer_name"] = cust["name"]
     session["customer_contact"] = cust["contact"]
     return jsonify({"ok": True, "name": cust["name"]})
+
+
+
+
+@app.route("/api/recover", methods=["POST"])
+def api_recover():
+    """Cliente: envia código para recuperar acesso."""
+    data = request.get_json() or {}
+    contact = (data.get("contact") or "").strip()
+    if not contact:
+        return jsonify({"ok": False, "error": "Informe telefone ou e-mail"}), 400
+    cust = find_customer(contact)
+    if not cust:
+        return jsonify({"ok": False, "error": "Cadastro não encontrado"}), 404
+    code = str(random.randint(1000, 9999))
+    now = datetime.now().isoformat()
+    conn = get_db()
+    conn.execute(
+        "INSERT OR REPLACE INTO pending_codes (contact, code, name, contact_type, created_at) VALUES (?,?,?,?,?)",
+        (cust["contact"], code, cust["name"], cust["contact_type"], now),
+    )
+    conn.commit()
+    conn.close()
+    print(f"[YOB] Código recuperação {cust['contact']}: {code}")
+    return jsonify({"ok": True, "demo_code": code, "contact": cust["contact"], "message": "Código enviado"})
+
+
+@app.route("/api/recover/confirm", methods=["POST"])
+def api_recover_confirm():
+    """Cliente: confirma código e entra na conta; opcionalmente define nova senha."""
+    data = request.get_json() or {}
+    contact = (data.get("contact") or "").strip()
+    code = (data.get("code") or "").strip()
+    new_password = (data.get("new_password") or "").strip()
+    if not contact or not code:
+        return jsonify({"ok": False, "error": "Dados incompletos"}), 400
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM pending_codes WHERE contact=?", (contact,)
+    ).fetchone()
+    if not row or row["code"] != code:
+        conn.close()
+        return jsonify({"ok": False, "error": "Código incorreto"}), 400
+    cust = conn.execute(
+        "SELECT * FROM customers WHERE contact=?", (contact,)
+    ).fetchone()
+    if not cust:
+        conn.close()
+        return jsonify({"ok": False, "error": "Cliente não encontrado"}), 404
+    if new_password:
+        if len(new_password) < 4:
+            conn.close()
+            return jsonify({"ok": False, "error": "Senha deve ter no mínimo 4 caracteres"}), 400
+        conn.execute(
+            "UPDATE customers SET password_hash=? WHERE id=?",
+            (generate_password_hash(new_password), cust["id"]),
+        )
+    conn.execute("DELETE FROM pending_codes WHERE contact=?", (contact,))
+    conn.commit()
+    conn.close()
+    session["customer_id"] = cust["id"]
+    session["customer_name"] = cust["name"]
+    session["customer_contact"] = cust["contact"]
+    return jsonify({"ok": True, "name": cust["name"]})
+
+
+@app.route("/api/admin/recover", methods=["POST"])
+def api_admin_recover():
+    """Admin: valida código de recuperação e define nova senha."""
+    data = request.get_json() or {}
+    recovery = (data.get("recovery_code") or "").strip()
+    new_password = (data.get("new_password") or "").strip()
+    if recovery != ADMIN_RECOVERY_CODE:
+        return jsonify({"ok": False, "error": "Código de recuperação inválido"}), 400
+    if not new_password or len(new_password) < 4:
+        return jsonify({"ok": False, "error": "Nova senha deve ter no mínimo 4 caracteres"}), 400
+    set_setting("admin_password_hash", generate_password_hash(new_password))
+    session["admin"] = True
+    session["admin_attempts"] = 0
+    return jsonify({"ok": True, "message": "Senha do admin atualizada"})
 
 
 @app.route("/api/google-login", methods=["POST"])
@@ -500,7 +629,7 @@ def admin_login():
 
     if request.method == "POST":
         pwd = (request.form.get("password") or "").strip()
-        if pwd in ADMIN_PASSWORDS:
+        if check_admin_password(pwd):
             session["admin"] = True
             session["admin_attempts"] = 0
             return redirect(url_for("admin"))
