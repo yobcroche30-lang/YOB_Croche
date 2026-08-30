@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}YOB_Crochê{% endblock %}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  {% if not hide_nav %}
+  <nav class="navbar">
+    <div class="container nav-content">
+      <a href="{{ url_for('index') }}" class="logo">🧶 YOB_Crochê</a>
+      <div class="nav-links">
+        {% if customer %}
+        <span class="user-chip">👤 {{ customer.split()[0] }}</span>
+        {% endif %}
+        <a href="{{ url_for('index') }}">Loja</a>
+        <a href="{{ url_for('cart_view') }}" class="cart-link">
+          <i class="bi bi-cart3"></i>
+          <span class="badge">{{ cart_count or 0 }}</span>
+        </a>
+        {% if session.get('admin') %}
+        <a href="{{ url_for('admin') }}">Painel</a>
+        <a href="{{ url_for('admin_logout') }}">Sair admin</a>
+        {% endif %}
+        {% if customer %}
+        <a href="{{ url_for('logout') }}">Sair</a>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+  {% endif %}
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div class="container" style="margin-top:12px;">
+      {% for m in messages %}
+      <div class="flash">{{ m }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+
+  <footer class="footer">
+    <div class="container">
+      <p>🧶 YOB_Crochê • Artesanato com amor</p>
+      <p class="small">Feito à mão com carinho</p>
+    </div>
+  </footer>
+</body>
+</html>

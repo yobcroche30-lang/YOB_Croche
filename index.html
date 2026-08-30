@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Loja • YOB_Crochê{% endblock %}
+{% block content %}
+<div class="hero">
+  <div class="container">
+    <h1>YOB_Crochê</h1>
+    <p>Artesanato feito com amor • Peças exclusivas em crochê</p>
+  </div>
+</div>
+<div class="container">
+  <div class="products-grid">
+    {% for p in products %}
+    <div class="product-card">
+      <a href="{{ url_for('product_detail', pid=p.id) }}" class="product-img">
+        {% if p.image %}
+        <img src="{{ url_for('static', filename=p.image) }}" alt="{{ p.name }}">
+        {% else %}
+        <span style="font-size:3rem;">🧶</span>
+        {% endif %}
+      </a>
+      <div class="product-body">
+        <span class="product-cat">{{ p.category }}</span>
+        <div class="product-name">{{ p.name }}{% if p.color %} – {{ p.color }}{% endif %}</div>
+        <div class="product-price">R$ {{ '%.2f'|format(p.price) }}</div>
+        <form method="post" action="{{ url_for('cart_add', pid=p.id) }}">
+          <button type="submit" class="btn btn-primary btn-sm btn-block"><i class="bi bi-cart-plus"></i> Adicionar</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty">Nenhum produto cadastrado ainda.</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

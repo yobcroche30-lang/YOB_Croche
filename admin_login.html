@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% set hide_nav = true %}
+{% block title %}Admin • YOB_Crochê{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="login-box">
+    <h2>Painel Admin</h2>
+    <form method="post">
+      <div class="form-group">
+        <label>Senha</label>
+        <input type="password" name="password" required placeholder="Senha admin">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+      <p class="hint">Acesso restrito — apenas responsáveis autorizados</p>
+    </form>
+  </div>
+</div>
+{% endblock %}

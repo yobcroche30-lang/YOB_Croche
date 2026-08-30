@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% set hide_nav = true %}
+{% block title %}Entrar • YOB_Crochê{% endblock %}
+{% block content %}
+<div class="container" style="padding-top:20px;">
+  <div class="auth-box">
+    <div style="text-align:center;margin-bottom:10px;">
+      <svg width="64" height="64" viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#FF8A00"/>
+            <stop offset="50%" style="stop-color:#E91E63"/>
+            <stop offset="100%" style="stop-color:#9B59B6"/>
+          </linearGradient>
+        </defs>
+        <polygon points="50,8 92,85 8,85" fill="none" stroke="url(#g)" stroke-width="10" stroke-linejoin="round"/>
+        <polygon points="50,28 72,70 28,70" fill="url(#g)"/>
+      </svg>
+    </div>
+    <h2>Bem-vinda(o)!</h2>
+    <p class="sub">Cadastre-se para acessar a loja YOB_Crochê</p>
+
+    <div id="step-register">
+      <button type="button" class="btn-google" onclick="googleLogin()">
+        <span style="font-weight:700;color:#4285F4;">G</span> Continuar com Google
+      </button>
+      <div class="auth-divider">ou cadastre com</div>
+      <div class="auth-tabs">
+        <button type="button" class="active" id="tab-phone" onclick="switchTab('phone')">Telefone</button>
+        <button type="button" id="tab-email" onclick="switchTab('email')">E-mail</button>
+      </div>
+      <div id="fields-phone">
+        <div class="form-group"><label>Seu nome *</label><input type="text" id="reg-name" placeholder="Nome"></div>
+        <div class="form-group"><label>WhatsApp / Telefone *</label><input type="tel" id="reg-phone" placeholder="(11) 99999-9999"></div>
+      </div>
+      <div id="fields-email" style="display:none;">
+        <div class="form-group"><label>Seu nome *</label><input type="text" id="reg-name-email" placeholder="Nome"></div>
+        <div class="form-group"><label>E-mail *</label><input type="email" id="reg-email" placeholder="seu@email.com"></div>
+      </div>
+      <button type="button" class="btn btn-primary btn-block" onclick="startRegister()">Receber código</button>
+      <p class="hint">Já tem cadastro? <a href="#" onclick="showLogin();return false;">Entrar</a></p>
+    </div>
+
+    <div id="step-code" style="display:none;">
+      <p class="sub">Digite o código de 4 dígitos</p>
+      <div class="demo-code">📱 Código (demonstração): <strong id="demo-code">----</strong></div>
+      <div class="code-inputs">
+        <input maxlength="1" id="c1" inputmode="numeric" oninput="nextCode(this,'c2')">
+        <input maxlength="1" id="c2" inputmode="numeric" oninput="nextCode(this,'c3')">
+        <input maxlength="1" id="c3" inputmode="numeric" oninput="nextCode(this,'c4')">
+        <input maxlength="1" id="c4" inputmode="numeric" oninput="confirmCode()">
+      </div>
+      <button type="button" class="btn btn-primary btn-block" onclick="confirmCode()">Confirmar</button>
+      <button type="button" class="btn btn-outline btn-block" style="margin-top:8px;" onclick="showRegister()">Voltar</button>
+    </div>
+
+    <div id="step-login" style="display:none;">
+      <div class="form-group"><label>Telefone ou e-mail</label><input type="text" id="login-id" placeholder="Contato cadastrado"></div>
+      <button type="button" class="btn btn-primary btn-block" onclick="doLogin()">Entrar</button>
+      <p class="hint">Novo? <a href="#" onclick="showRegister();return false;">Criar cadastro</a></p>
+    </div>
+  </div>
+</div>
+
+<script>
+let pendingContact = "";
+let authType = "phone";
+
+function switchTab(t) {
+  authType = t;
+  document.getElementById("tab-phone").classList.toggle("active", t === "phone");
+  document.getElementById("tab-email").classList.toggle("active", t === "email");
+  document.getElementById("fields-phone").style.display = t === "phone" ? "block" : "none";
+  document.getElementById("fields-email").style.display = t === "email" ? "block" : "none";
+}
+function showRegister() {
+  document.getElementById("step-register").style.display = "block";
+  document.getElementById("step-code").style.display = "none";
+  document.getElementById("step-login").style.display = "none";
+}
+function showLogin() {
+  document.getElementById("step-register").style.display = "none";
+  document.getElementById("step-code").style.display = "none";
+  document.getElementById("step-login").style.display = "block";
+}
+function nextCode(el, next) {
+  if (el.value && next) document.getElementById(next).focus();
+}
+async function startRegister() {
+  let name, contact, type;
+  if (authType === "phone") {
+    name = document.getElementById("reg-name").value.trim();
+    contact = document.getElementById("reg-phone").value.trim();
+    type = "phone";
+  } else {
+    name = document.getElementById("reg-name-email").value.trim();
+    contact = document.getElementById("reg-email").value.trim();
+    type = "email";
+  }
+  if (!name || !contact) return alert("Preencha nome e contato");
+  const res = await fetch("/api/register", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({name, contact, type})
+  });
+  const data = await res.json();
+  if (!data.ok) return alert(data.error || "Erro");
+  pendingContact = contact;
+  document.getElementById("demo-code").textContent = data.demo_code;
+  document.getElementById("step-register").style.display = "none";
+  document.getElementById("step-code").style.display = "block";
+}
+async function confirmCode() {
+  const code = ["c1","c2","c3","c4"].map(id => document.getElementById(id).value).join("");
+  if (code.length < 4) return;
+  const res = await fetch("/api/confirm", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({contact: pendingContact, code})
+  });
+  const data = await res.json();
+  if (!data.ok) return alert(data.error || "Código inválido");
+  window.location.href = "/";
+}
+async function doLogin() {
+  const contact = document.getElementById("login-id").value.trim();
+  if (!contact) return alert("Informe telefone ou e-mail");
+  const res = await fetch("/api/login", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({contact})
+  });
+  const data = await res.json();
+  if (!data.ok) return alert(data.error || "Não encontrado");
+  window.location.href = "/";
+}
+async function googleLogin() {
+  const name = prompt("Nome (login Google simplificado):", "");
+  if (!name) return;
+  const email = prompt("E-mail Google:", "");
+  if (!email) return;
+  const res = await fetch("/api/google-login", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({name, email})
+  });
+  const data = await res.json();
+  if (!data.ok) return alert(data.error || "Erro");
+  window.location.href = "/";
+}
+</script>
+{% endblock %}
