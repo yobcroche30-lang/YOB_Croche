@@ -12,9 +12,25 @@ from flask import (
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 
-app = Flask(__name__)
+# Compatível com duas estruturas:
+# 1) templates/ e static/ (ideal)
+# 2) arquivos .html e style.css na raiz (como no GitHub atual)
+_base = os.path.dirname(os.path.abspath(__file__))
+_tpl = os.path.join(_base, "templates")
+_static = os.path.join(_base, "static")
+if not os.path.isdir(_tpl):
+    # HTML na raiz do repositório
+    _tpl = _base
+if not os.path.isdir(_static):
+    _static = _base
+
+app = Flask(__name__, template_folder=_tpl, static_folder=_static, static_url_path="/static")
 app.secret_key = os.environ.get("SECRET_KEY", "yob-croche-secret-2026-change-me")
-app.config["UPLOAD_FOLDER"] = os.path.join(os.path.dirname(__file__), "static", "uploads")
+# uploads
+_upload = os.path.join(_base, "static", "uploads")
+if not os.path.isdir(os.path.join(_base, "static")):
+    _upload = os.path.join(_base, "uploads")
+app.config["UPLOAD_FOLDER"] = _upload
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5MB
 ALLOWED_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
 
