@@ -15,7 +15,7 @@
       <a href="{{ url_for('index') }}" class="logo">🧶 YOB_Crochê</a>
       <div class="nav-links">
         {% if customer %}
-        <span class="user-chip">👤 {{ customer.split()[0] }}</span>
+        <span class="user-chip">👤 {{ customer.split(' ')[0] }}</span>
         {% endif %}
         <a href="{{ url_for('index') }}">Loja</a>
         <a href="{{ url_for('cart_view') }}" class="cart-link">

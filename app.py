@@ -28,9 +28,31 @@ ADMIN_PASSWORDS = set(
 )
 MAX_ADMIN_ATTEMPTS = 5
 WHATSAPP = os.environ.get("WHATSAPP", "5511999999999")
-DB_PATH = os.path.join(os.path.dirname(__file__), "yob.db")
 
-os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+# No Render a pasta pode ser só leitura — usa /tmp se precisar
+_base_dir = os.path.dirname(os.path.abspath(__file__))
+_default_db = os.path.join(_base_dir, "yob.db")
+_tmp_db = "/tmp/yob_croche.db"
+
+
+def _resolve_db_path():
+    try:
+        test = os.path.join(_base_dir, ".write_test")
+        with open(test, "w") as f:
+            f.write("ok")
+        os.remove(test)
+        return _default_db
+    except Exception:
+        return _tmp_db
+
+
+DB_PATH = os.environ.get("DATABASE_PATH") or _resolve_db_path()
+
+try:
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+except Exception:
+    app.config["UPLOAD_FOLDER"] = "/tmp/yob_uploads"
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
 
 def get_db():
@@ -174,7 +196,7 @@ def index():
 def auth():
     if session.get("customer_id"):
         return redirect(url_for("index"))
-    return render_template("auth.html")
+    return render_template("auth.html", hide_nav=True, cart_count=0, customer=None)
 
 
 @app.route("/api/register", methods=["POST"])
@@ -458,7 +480,7 @@ def admin_login():
     attempts = session.get("admin_attempts", 0)
     if attempts >= MAX_ADMIN_ATTEMPTS:
         flash("Muitas tentativas. Aguarde ou limpe os cookies do navegador.")
-        return render_template("admin_login.html"), 429
+        return render_template("admin_login.html", hide_nav=True, cart_count=0, customer=None), 429
 
     if request.method == "POST":
         pwd = (request.form.get("password") or "").strip()
@@ -469,7 +491,7 @@ def admin_login():
         session["admin_attempts"] = attempts + 1
         left = MAX_ADMIN_ATTEMPTS - session["admin_attempts"]
         flash(f"Senha incorreta. Tentativas restantes: {left}")
-    return render_template("admin_login.html")
+    return render_template("admin_login.html", hide_nav=True, cart_count=0, customer=None)
 
 
 @app.route("/admin/logout")
@@ -553,7 +575,16 @@ def uploaded_file(filename):
 
 
 # init on import (for gunicorn)
-init_db()
+try:
+    init_db()
+except Exception as e:
+    print("AVISO init_db:", e)
+
+
+@app.route("/health")
+def health():
+    return {"ok": True, "service": "YOB_Croche"}
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
