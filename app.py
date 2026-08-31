@@ -121,6 +121,17 @@ def init_db():
         )
     """)
     c.execute("""
+        CREATE TABLE IF NOT EXISTS tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_id INTEGER,
+            customer_name TEXT,
+            customer_contact TEXT,
+            mode TEXT,
+            message TEXT,
+            created_at TEXT
+        )
+    """)
+    c.execute("""
         CREATE TABLE IF NOT EXISTS orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             customer_id INTEGER,
@@ -618,6 +629,76 @@ def checkout():
     )
 
 
+
+@app.route("/poster")
+@customer_required
+def poster():
+    conn = get_db()
+    products = conn.execute(
+        "SELECT * FROM products WHERE active=1 ORDER BY id DESC"
+    ).fetchall()
+    conn.close()
+    cart = session.get("cart", {})
+    return render_template(
+        "poster.html",
+        products=products,
+        cart_count=sum(cart.values()),
+        customer=session.get("customer_name"),
+        whatsapp=WHATSAPP,
+    )
+
+
+@app.route("/attend")
+@customer_required
+def attend():
+    cart = session.get("cart", {})
+    return render_template(
+        "attend.html",
+        cart_count=sum(cart.values()),
+        customer=session.get("customer_name"),
+        whatsapp=WHATSAPP,
+    )
+
+
+@app.route("/rights")
+@customer_required
+def rights():
+    cart = session.get("cart", {})
+    return render_template(
+        "rights.html",
+        cart_count=sum(cart.values()),
+        customer=session.get("customer_name"),
+        whatsapp=WHATSAPP,
+    )
+
+
+@app.route("/api/ticket", methods=["POST"])
+@customer_required
+def api_ticket():
+    data = request.get_json() or {}
+    mode = (data.get("mode") or "vendedor").strip()
+    message = (data.get("message") or "").strip()
+    if not message:
+        return jsonify({"ok": False, "error": "Mensagem vazia"}), 400
+    conn = get_db()
+    conn.execute(
+        """INSERT INTO tickets (customer_id, customer_name, customer_contact, mode, message, created_at)
+           VALUES (?,?,?,?,?,?)""",
+        (
+            session.get("customer_id"),
+            session.get("customer_name"),
+            session.get("customer_contact"),
+            mode,
+            message,
+            datetime.now().isoformat(),
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+
 # ---------- ADMIN ----------
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
@@ -652,9 +733,10 @@ def admin():
     products = conn.execute("SELECT * FROM products ORDER BY id DESC").fetchall()
     orders = conn.execute("SELECT * FROM orders ORDER BY id DESC LIMIT 20").fetchall()
     customers = conn.execute("SELECT * FROM customers ORDER BY id DESC LIMIT 50").fetchall()
+    tickets = conn.execute("SELECT * FROM tickets ORDER BY id DESC LIMIT 30").fetchall()
     conn.close()
     return render_template(
-        "admin.html", products=products, orders=orders, customers=customers
+        "admin.html", products=products, orders=orders, customers=customers, tickets=tickets
     )
 
 

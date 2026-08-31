@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Direitos do consumidor • YOB_Crochê{% endblock %}
+{% block content %}
+<div class="container" style="padding:20px 16px;">
+  <h2 style="color:#9B59B6;margin-bottom:8px;"><i class="bi bi-shield-check"></i> Direitos do consumidor</h2>
+  <span class="law-badge">Lei nº 8.078/1990 — CDC</span>
+  <p style="color:#666;font-size:.9rem;margin:10px 0 16px;">
+    Informações gerais para clientes da <strong>YOB_Crochê</strong>. Não substitui orientação jurídica oficial.
+  </p>
+
+  <div class="rights-card">
+    <h3>1. Informação clara</h3>
+    <ul>
+      <li>Você tem direito a informações claras sobre o produto (material, tamanho, cor, preço e prazo).</li>
+      <li>A YOB_Crochê se compromete a descrever as peças de crochê de forma honesta no catálogo.</li>
+    </ul>
+  </div>
+  <div class="rights-card">
+    <h3>2. Compra online (art. 49 do CDC)</h3>
+    <ul>
+      <li>Em compras fora do estabelecimento (internet/WhatsApp), em regra há <strong>7 dias</strong> para desistência a partir do recebimento, sem precisar justificar (direito de arrependimento), nas hipóteses previstas em lei.</li>
+      <li>Peças personalizadas sob encomenda podem ter regras específicas — confirme no atendimento antes de pedir.</li>
+    </ul>
+  </div>
+  <div class="rights-card">
+    <h3>3. Qualidade e vício do produto</h3>
+    <ul>
+      <li>Se o produto apresentar defeito (vício), você pode exigir troca, abatimento no preço ou, nos casos cabíveis, devolução do valor.</li>
+      <li>Prazo para reclamar de vício aparente: em geral <strong>30 dias</strong> (bens não duráveis) ou <strong>90 dias</strong> (bens duráveis), conforme o CDC.</li>
+      <li>Crochê artesanal pode ter pequenas variações naturais de cor e ponto — isso não é, por si só, defeito.</li>
+    </ul>
+  </div>
+  <div class="rights-card">
+    <h3>4. Trocas na YOB_Crochê</h3>
+    <ul>
+      <li>Troca por tamanho/cor: solicite em até 7 dias após o recebimento, produto sem uso e com etiqueta (quando houver).</li>
+      <li>Defeito de fabricação: entre em contato pelo atendimento ou WhatsApp com foto do problema.</li>
+      <li>Custos de envio da troca: conforme combinado e a legislação aplicável ao caso.</li>
+    </ul>
+  </div>
+  <div class="rights-card">
+    <h3>5. Como reclamar</h3>
+    <ul>
+      <li>1º) Canal da loja: menu <strong>Atendimento</strong> (reclamação ou troca).</li>
+      <li>2º) WhatsApp da YOB_Crochê.</li>
+      <li>3º) Órgãos de defesa: Procon, consumidor.gov.br ou Juizado Especial.</li>
+    </ul>
+  </div>
+  <div class="rights-card">
+    <h3>6. Política resumida da empresa</h3>
+    <ul>
+      <li>Produtos artesanais em crochê, feitos sob cuidado individual.</li>
+      <li>Pagamento: Pix ou combinado no WhatsApp.</li>
+      <li>Entrega: retirada ou Uber Flex (taxa informada no checkout).</li>
+      <li>Privacidade: dados de cadastro usados só para atendimento e pedidos.</li>
+    </ul>
+  </div>
+  <div class="disclaimer">
+    <strong>Aviso:</strong> Este texto é informativo, baseado no Código de Defesa do Consumidor (Lei 8.078/1990) e em práticas comuns de comércio. Não constitui parecer jurídico. Em caso de dúvida, consulte o Procon ou um advogado.
+  </div>
+  <a href="{{ url_for('attend') }}" class="btn btn-primary btn-block" style="margin-top:16px;">Ir para atendimento</a>
+  <a href="{{ url_for('index') }}" class="btn btn-outline btn-block" style="margin-top:8px;">← Voltar à loja</a>
+</div>
+{% endblock %}

@@ -8,6 +8,20 @@
   </div>
 </div>
 <div class="container">
+  <div class="menu-grid">
+    <a href="{{ url_for('poster') }}" class="menu-btn">
+      <i class="bi bi-images"></i><span>Cartaz de produtos</span>
+    </a>
+    <a href="{{ url_for('attend') }}" class="menu-btn">
+      <i class="bi bi-chat-dots"></i><span>Falar com vendedor</span>
+    </a>
+    <a href="{{ url_for('rights') }}" class="menu-btn">
+      <i class="bi bi-shield-check"></i><span>Direitos do consumidor</span>
+    </a>
+    <a href="{{ url_for('cart_view') }}" class="menu-btn">
+      <i class="bi bi-cart3"></i><span>Meu carrinho</span>
+    </a>
+  </div>
   <div class="products-grid">
     {% for p in products %}
     <div class="product-card">

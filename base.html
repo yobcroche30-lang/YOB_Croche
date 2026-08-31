@@ -19,6 +19,9 @@
         <span class="user-chip">👤 {{ customer.split(' ')[0] }}</span>
         {% endif %}
         <a href="{{ url_for('index') }}">Loja</a>
+        <a href="{{ url_for('poster') }}">Cartaz</a>
+        <a href="{{ url_for('attend') }}">Atendimento</a>
+        <a href="{{ url_for('rights') }}">Direitos</a>
         <a href="{{ url_for('cart_view') }}" class="cart-link">
           <i class="bi bi-cart3"></i>
           <span class="badge">{{ cart_count or 0 }}</span>

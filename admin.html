@@ -98,6 +98,35 @@
     </div>
   </div>
 </div>
+
+  <div class="admin-section">
+    <h3>Atendimentos / Chat ({{ tickets|length if tickets is defined else 0 }})</h3>
+    <div style="overflow-x:auto;">
+      <table class="admin-table">
+        <thead>
+          <tr><th>ID</th><th>Tipo</th><th>Cliente</th><th>Mensagem</th><th>Data</th></tr>
+        </thead>
+        <tbody>
+          {% if tickets is defined %}
+          {% for tk in tickets %}
+          <tr>
+            <td>{{ tk.id }}</td>
+            <td>{{ tk.mode }}</td>
+            <td>{{ tk.customer_name }}<br><small>{{ tk.customer_contact }}</small></td>
+            <td>{{ tk.message[:80] }}{% if tk.message|length > 80 %}…{% endif %}</td>
+            <td>{{ tk.created_at[:16] if tk.created_at else '' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5">Nenhum atendimento ainda</td></tr>
+          {% endfor %}
+          {% else %}
+          <tr><td colspan="5">Nenhum atendimento ainda</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
 <script>
 function editP(id, name, cat, color, price, stock, desc, active) {
   document.getElementById("edit-id").value = id;

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Cartaz • YOB_Crochê{% endblock %}
+{% block content %}
+<div class="container" style="padding:20px 16px;">
+  <div class="poster-wrap" id="poster-print">
+    <div class="poster-header">
+      <div style="font-size:2rem;">🧶</div>
+      <h2>YOB_Crochê</h2>
+      <p>Catálogo de produtos • Feito à mão com amor</p>
+    </div>
+    <div class="poster-grid">
+      {% for p in products %}
+      <div class="poster-item">
+        {% if p.image %}
+        <img src="{{ url_for('static', filename=p.image) }}" alt="{{ p.name }}" style="width:70px;height:70px;object-fit:cover;border-radius:10px;margin-bottom:6px;">
+        {% else %}
+        <div class="emoji">🧶</div>
+        {% endif %}
+        <div class="pname">{{ p.name }}{% if p.color %} · {{ p.color }}{% endif %}</div>
+        <div class="pprice">R$ {{ '%.2f'|format(p.price) }}</div>
+      </div>
+      {% else %}
+      <p style="grid-column:1/-1;text-align:center;color:#888;">Nenhum produto ainda.</p>
+      {% endfor %}
+    </div>
+    <div class="poster-footer">
+      Peças artesanais em crochê • Encomendas pelo site e WhatsApp<br>
+      Trocas conforme Código de Defesa do Consumidor
+    </div>
+  </div>
+  <button class="btn btn-primary btn-block" onclick="window.print()">🖨️ Imprimir / Salvar cartaz</button>
+  <a href="{{ url_for('index') }}" class="btn btn-outline btn-block" style="margin-top:8px;">← Voltar à loja</a>
+</div>
+{% endblock %}

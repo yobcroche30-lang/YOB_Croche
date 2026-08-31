@@ -154,3 +154,61 @@ body {
 .empty { text-align: center; padding: 40px; color: #888; }
 .text-center { text-align: center; }
 .success-icon { font-size: 3rem; color: #27ae60; }
+
+/* Menu home */
+.menu-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 16px 0 24px; }
+.menu-btn {
+  background: white; border-radius: 16px; padding: 18px 12px; text-align: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06); text-decoration: none; color: inherit;
+  display: block; border: none; font-family: inherit;
+}
+.menu-btn i { font-size: 1.8rem; color: var(--purple); display: block; margin-bottom: 8px; }
+.menu-btn span { font-weight: 600; font-size: 0.9rem; color: #333; }
+
+/* Cartaz */
+.poster-wrap { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 8px 30px rgba(155,89,182,0.15); margin-bottom: 20px; }
+.poster-header { background: linear-gradient(135deg, #9B59B6, #E91E63); color: white; padding: 24px 16px; text-align: center; }
+.poster-header h2 { font-size: 1.5rem; margin-bottom: 4px; }
+.poster-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 16px; }
+@media (min-width: 600px) { .poster-grid { grid-template-columns: repeat(3, 1fr); } }
+.poster-item { background: linear-gradient(135deg, #fdf6ff, #fff); border: 1px solid #f0e6f5; border-radius: 14px; padding: 12px; text-align: center; }
+.poster-item .emoji { font-size: 2.2rem; margin-bottom: 6px; }
+.poster-item .pname { font-weight: 600; font-size: 0.85rem; }
+.poster-item .pprice { color: var(--magenta); font-weight: 700; margin-top: 4px; }
+.poster-footer { background: #4A235A; color: white; text-align: center; padding: 14px; font-size: 0.9rem; }
+
+/* Atendimento */
+.attend-cards { display: grid; gap: 12px; margin-bottom: 20px; }
+.attend-card {
+  background: white; border-radius: 16px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  cursor: pointer; border: 2px solid transparent; transition: 0.2s; display: block;
+}
+.attend-card:hover { border-color: var(--purple); }
+.attend-card h3 { color: var(--purple); margin-bottom: 6px; font-size: 1rem; }
+.attend-card p { color: #666; font-size: 0.85rem; }
+.chat-box { background: white; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); overflow: hidden; max-width: 500px; margin: 0 auto; }
+.chat-header { background: linear-gradient(90deg, var(--purple), var(--magenta)); color: white; padding: 14px 16px; font-weight: 600; }
+.chat-messages { height: 280px; overflow-y: auto; padding: 14px; background: #f9f5fb; }
+.msg { max-width: 85%; padding: 10px 12px; border-radius: 12px; margin-bottom: 10px; font-size: 0.9rem; line-height: 1.4; }
+.msg.bot { background: #eee; border-bottom-left-radius: 4px; }
+.msg.user { background: linear-gradient(90deg, var(--purple), var(--magenta)); color: white; margin-left: auto; border-bottom-right-radius: 4px; }
+.chat-input-row { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #eee; }
+.chat-input-row input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 20px; font-family: inherit; }
+.quick-btns { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 12px 12px; }
+.quick-btns button {
+  padding: 8px 12px; border-radius: 20px; border: 1px solid var(--purple);
+  background: white; color: var(--purple); font-size: 0.8rem; cursor: pointer; font-family: inherit;
+}
+
+/* Direitos */
+.rights-card { background: white; border-radius: 16px; padding: 18px; margin-bottom: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+.rights-card h3 { color: var(--purple); margin-bottom: 8px; font-size: 1.05rem; }
+.rights-card ul { padding-left: 18px; color: #555; font-size: 0.9rem; line-height: 1.55; }
+.rights-card li { margin-bottom: 6px; }
+.law-badge { display: inline-block; background: #E8F5E9; color: #2E7D32; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; margin-bottom: 10px; }
+.disclaimer { background: #FFF8E1; border-left: 4px solid #FFC107; padding: 12px; border-radius: 0 10px 10px 0; font-size: 0.8rem; color: #666; margin-top: 16px; }
+
+@media print {
+  .navbar, .footer, .btn { display: none !important; }
+  .poster-wrap { box-shadow: none; }
+}

@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Atendimento • YOB_Crochê{% endblock %}
+{% block content %}
+<div class="container" style="padding:20px 16px;">
+  <h2 style="color:#9B59B6;margin-bottom:14px;"><i class="bi bi-headset"></i> Atendimento virtual</h2>
+  <div class="attend-cards">
+    <div class="attend-card" onclick="openChat('vendedor')">
+      <h3>💬 Falar com vendedor</h3>
+      <p>Dúvidas sobre produtos, preços, prazos e encomendas personalizadas.</p>
+    </div>
+    <div class="attend-card" onclick="openChat('reclamacao')">
+      <h3>⚠️ Reclamação</h3>
+      <p>Registre um problema com pedido, entrega ou qualidade do produto.</p>
+    </div>
+    <div class="attend-card" onclick="openChat('troca')">
+      <h3>🔄 Pedido de troca</h3>
+      <p>Solicite troca ou devolução conforme a política e a lei do consumidor.</p>
+    </div>
+    <a class="attend-card" href="https://wa.me/{{ whatsapp }}?text={{ 'Olá! Sou cliente YOB_Crochê e preciso de atendimento.'|urlencode }}" target="_blank" style="text-decoration:none;color:inherit;">
+      <h3>📱 WhatsApp direto</h3>
+      <p>Falar agora com a YOB_Crochê pelo WhatsApp.</p>
+    </a>
+  </div>
+
+  <div class="chat-box" id="chat-box" style="display:none;">
+    <div class="chat-header" id="chat-title">Atendimento</div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="quick-btns" id="quick-btns"></div>
+    <div class="chat-input-row">
+      <input type="text" id="chat-input" placeholder="Digite sua mensagem..." onkeydown="if(event.key==='Enter')sendChat()">
+      <button type="button" class="btn btn-primary btn-sm" onclick="sendChat()">Enviar</button>
+    </div>
+  </div>
+  <a href="{{ url_for('index') }}" class="btn btn-outline btn-block" style="margin-top:16px;">← Voltar</a>
+</div>
+<script>
+const WHATSAPP = "{{ whatsapp }}";
+let chatMode = "vendedor";
+function openChat(mode) {
+  chatMode = mode;
+  const titles = {vendedor:"💬 Falar com vendedor", reclamacao:"⚠️ Reclamação", troca:"🔄 Pedido de troca"};
+  document.getElementById("chat-title").textContent = titles[mode] || "Atendimento";
+  document.getElementById("chat-box").style.display = "block";
+  document.getElementById("chat-messages").innerHTML = "";
+  const intros = {
+    vendedor: "Olá! Sou o atendimento virtual da YOB_Crochê 🧶 Como posso ajudar? Produtos, preços, prazos ou encomendas.",
+    reclamacao: "Olá. Sinto muito pelo inconveniente. Descreva o problema (pedido, entrega ou produto). Vamos registrar.",
+    troca: "Olá! Para troca ou devolução, informe o produto e o motivo. Lembre os prazos do CDC (em geral 7 dias para arrependimento em compra online)."
+  };
+  addBot(intros[mode]);
+  const quicks = {
+    vendedor: ["Quais produtos tem?", "Qual o prazo?", "Faz sob encomenda?", "Ver cartaz"],
+    reclamacao: ["Produto com defeito", "Atraso na entrega", "Pedido errado", "WhatsApp"],
+    troca: ["Trocar tamanho/cor", "Devolver produto", "Veio com defeito", "Ver direitos"]
+  };
+  document.getElementById("quick-btns").innerHTML = (quicks[mode]||[]).map(q =>
+    `<button type="button" onclick="quickMsg(${JSON.stringify(q)})">${q}</button>`
+  ).join("");
+  document.getElementById("chat-box").scrollIntoView({behavior:"smooth"});
+}
+function addBot(text) {
+  const d = document.createElement("div"); d.className = "msg bot"; d.textContent = text;
+  document.getElementById("chat-messages").appendChild(d);
+  document.getElementById("chat-messages").scrollTop = 9999;
+}
+function addUser(text) {
+  const d = document.createElement("div"); d.className = "msg user"; d.textContent = text;
+  document.getElementById("chat-messages").appendChild(d);
+  document.getElementById("chat-messages").scrollTop = 9999;
+}
+function quickMsg(t) { document.getElementById("chat-input").value = t; sendChat(); }
+async function sendChat() {
+  const input = document.getElementById("chat-input");
+  const text = input.value.trim(); if (!text) return;
+  input.value = ""; addUser(text);
+  try {
+    await fetch("/api/ticket", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({mode: chatMode, message: text})
+    });
+  } catch (e) {}
+  setTimeout(() => botReply(text), 400);
+}
+function botReply(text) {
+  const t = text.toLowerCase();
+  let reply = "";
+  if (chatMode === "vendedor") {
+    if (t.includes("produto") || t.includes("cartaz") || t.includes("quais")) {
+      reply = "Temos bolsas, sousplat, amigurumi e mais no cartaz e na loja!";
+      setTimeout(() => location.href = "{{ url_for('poster') }}", 1200);
+    } else if (t.includes("prazo") || t.includes("entrega"))
+      reply = "Retirada grátis ou Uber Flex (+R$ 5). Sob encomenda: combine no WhatsApp.";
+    else if (t.includes("encomenda") || t.includes("personaliz"))
+      reply = "Sim! Fazemos sob encomenda. Fale no WhatsApp com cor e modelo.";
+    else if (t.includes("preço") || t.includes("valor"))
+      reply = "Os preços estão no cartaz e na loja. Porta-celular a partir de R$ 35.";
+    else
+      reply = "Obrigada! Para atendimento humano, use o WhatsApp direto. Posso ajudar com produtos, prazos ou trocas.";
+  } else if (chatMode === "reclamacao") {
+    if (t.includes("defeito"))
+      reply = "Lamentamos. Envie foto pelo WhatsApp. Pelo CDC, vício pode gerar troca ou reembolso conforme o caso.";
+    else if (t.includes("atraso"))
+      reply = "Pedimos desculpas. Informe a data do pedido no WhatsApp para priorizarmos.";
+    else if (t.includes("errado"))
+      reply = "Vamos corrigir. Descreva o que recebeu x o pedido e fale no WhatsApp.";
+    else if (t.includes("whatsapp"))
+      { window.open("https://wa.me/"+WHATSAPP, "_blank"); reply = "Abrindo WhatsApp..."; }
+    else
+      reply = "Reclamação registrada. Para agilizar, envie detalhes no WhatsApp da loja.";
+  } else {
+    if (t.includes("tamanho") || t.includes("cor"))
+      reply = "Troca por tamanho/cor: em até 7 dias, produto sem uso. Fale no WhatsApp.";
+    else if (t.includes("devolver") || t.includes("devolução"))
+      reply = "Arrependimento (compra online): em regra 7 dias após o recebimento (art. 49 CDC), nas hipóteses legais.";
+    else if (t.includes("defeito"))
+      reply = "Envie foto e dados do pedido. Você também pode ler a página Direitos.";
+    else if (t.includes("direito"))
+      { reply = "Abrindo direitos..."; setTimeout(() => location.href = "{{ url_for('rights') }}", 800); }
+    else
+      reply = "Pedido de troca registrado. Fale no WhatsApp com o produto e o motivo.";
+  }
+  addBot(reply);
+}
+</script>
+{% endblock %}
