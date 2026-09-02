@@ -735,9 +735,31 @@ def admin():
     customers = conn.execute("SELECT * FROM customers ORDER BY id DESC LIMIT 50").fetchall()
     tickets = conn.execute("SELECT * FROM tickets ORDER BY id DESC LIMIT 30").fetchall()
     conn.close()
+    admin_photo = get_setting("admin_photo")
     return render_template(
-        "admin.html", products=products, orders=orders, customers=customers, tickets=tickets
+        "admin.html", products=products, orders=orders, customers=customers, tickets=tickets,
+        admin_photo=admin_photo, customer=session.get("customer_name"), cart_count=0
     )
+
+
+
+@app.route("/admin/profile-photo", methods=["POST"])
+@admin_required
+def admin_profile_photo():
+    f = request.files.get("photo")
+    if not f or not f.filename:
+        flash("Selecione uma foto")
+        return redirect(url_for("admin"))
+    if not allowed_file(f.filename):
+        flash("Use PNG, JPG, JPEG, GIF ou WEBP")
+        return redirect(url_for("admin"))
+    fname = secure_filename(f"admin_profile_{datetime.now().strftime('%Y%m%d%H%M%S')}_{f.filename}")
+    path = os.path.join(app.config["UPLOAD_FOLDER"], fname)
+    f.save(path)
+    rel = f"uploads/{fname}"
+    set_setting("admin_photo", rel)
+    flash("Foto do perfil atualizada!")
+    return redirect(url_for("admin"))
 
 
 @app.route("/admin/product/save", methods=["POST"])

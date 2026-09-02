@@ -7,6 +7,26 @@
     <a href="{{ url_for('admin_logout') }}" class="btn btn-outline btn-sm">Sair admin</a>
   </div>
 
+  <div class="admin-section admin-profile" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <div>
+      {% if admin_photo %}
+      <img src="{{ url_for('static', filename=admin_photo) }}" alt="Admin"
+           style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid #9B59B6;">
+      {% else %}
+      <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#9B59B6,#E91E63);color:#fff;display:flex;align-items:center;justify-content:center;font-size:2rem;">👤</div>
+      {% endif %}
+    </div>
+    <div style="flex:1;min-width:200px;">
+      <h3 style="margin:0 0 6px;color:#9B59B6;">Meu perfil (Admin)</h3>
+      <p style="margin:0 0 10px;color:#666;font-size:.9rem;">Foto que aparece no painel administrativo</p>
+      <form method="post" action="{{ url_for('admin_profile_photo') }}" enctype="multipart/form-data" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input type="file" name="photo" accept="image/*" required style="font-size:.85rem;">
+        <button type="submit" class="btn btn-primary btn-sm">Salvar foto</button>
+      </form>
+    </div>
+  </div>
+
+
   <div class="admin-section">
     <h3>+ Novo / Editar Produto</h3>
     <form method="post" action="{{ url_for('admin_product_save') }}" enctype="multipart/form-data">
