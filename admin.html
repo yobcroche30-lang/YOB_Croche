@@ -33,11 +33,11 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div style="background:#E8F5E9;padding:12px;border-radius:10px">
         <div style="color:#666;font-size:.85rem">Vendas (faturamento)</div>
-        <strong style="font-size:1.2rem;color:#2E7D32">R$ {{ '%.2f'|format(stats.vendas if stats else 0) }}</strong>
+        <strong style="font-size:1.2rem;color:#2E7D32">R$ {% if stats %}{{ '%.2f'|format(stats.vendas) }}{% else %}0.00{% endif %}</strong>
       </div>
       <div style="background:#FFF3E0;padding:12px;border-radius:10px">
         <div style="color:#666;font-size:.85rem">Custos estimados</div>
-        <strong>R$ {{ '%.2f'|format(stats.custos if stats else 0) }}</strong>
+        <strong>R$ {% if stats %}{{ '%.2f'|format(stats.custos) }}{% else %}0.00{% endif %}</strong>
       </div>
       <div style="background:#FCE4EC;padding:12px;border-radius:10px">
         <div style="color:#666;font-size:.85rem">Pedidos</div>
@@ -45,7 +45,7 @@
       </div>
       <div style="background:#E3F2FD;padding:12px;border-radius:10px">
         <div style="color:#666;font-size:.85rem">Lucro estimado</div>
-        <strong style="font-size:1.2rem;color:#1565C0">R$ {{ '%.2f'|format(stats.lucro if stats else 0) }}</strong>
+        <strong style="font-size:1.2rem;color:#1565C0">R$ {% if stats %}{{ '%.2f'|format(stats.lucro) }}{% else %}0.00{% endif %}</strong>
       </div>
     </div>
     <p style="font-size:.75rem;color:#888;margin:10px 0 0">Lucro estimado = vendas − 40% de custo médio. Cadastre o custo real em cada produto para ficar mais preciso. Valores R$ 0,00 = ainda não houve pedidos no site.</p>

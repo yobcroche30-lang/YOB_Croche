@@ -63,6 +63,8 @@ def _resolve_db_path():
         return _tmp_db
 
 
+# No Render: se tiver disco persistente, use DATABASE_PATH=/var/data/yob.db
+# Sem disco, cada redeploy apaga o SQLite e os produtos "velhos" voltam (seed).
 DB_PATH = os.environ.get("DATABASE_PATH") or _resolve_db_path()
 
 try:
@@ -88,6 +90,7 @@ def init_db():
             category TEXT DEFAULT 'Acessórios',
             color TEXT,
             price REAL NOT NULL,
+            cost REAL,
             stock INTEGER DEFAULT 0,
             description TEXT,
             image TEXT,
@@ -95,6 +98,10 @@ def init_db():
             created_at TEXT
         )
     """)
+    try:
+        c.execute("ALTER TABLE products ADD COLUMN cost REAL")
+    except Exception:
+        pass
     c.execute("""
         CREATE TABLE IF NOT EXISTS customers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -729,33 +736,46 @@ def admin_logout():
 @app.route("/admin")
 @admin_required
 def admin():
-    conn = get_db()
-    products = conn.execute("SELECT * FROM products ORDER BY id DESC").fetchall()
-    orders = conn.execute("SELECT * FROM orders ORDER BY id DESC LIMIT 50").fetchall()
-    customers = conn.execute("SELECT * FROM customers ORDER BY id DESC LIMIT 50").fetchall()
-    tickets = conn.execute("SELECT * FROM tickets ORDER BY id DESC LIMIT 30").fetchall()
-    # Lucros: faturamento, custo estimado (40% se sem cost), lucro
-    fat = sum(float(o["total"] or 0) for o in orders)
-    custo = 0.0
-    for o in orders:
-        # sem items detalhados com cost: estima 40% do total do pedido
-        custo += float(o["total"] or 0) * 0.40
-    # se produtos tiverem cost, não recalculamos item a item aqui (total já pago)
-    lucro = max(0.0, fat - custo)
-    stats = {
-        "vendas": fat,
-        "custos": custo,
-        "lucro": lucro,
-        "pedidos": len(orders),
-        "ticket_medio": (fat / len(orders)) if orders else 0,
-    }
-    conn.close()
-    admin_photo = get_setting("admin_photo")
-    return render_template(
-        "admin.html", products=products, orders=orders, customers=customers, tickets=tickets,
-        admin_photo=admin_photo, stats=stats,
-        customer=session.get("customer_name"), cart_count=0
-    )
+    try:
+        conn = get_db()
+        products = conn.execute("SELECT * FROM products ORDER BY id DESC").fetchall()
+        orders = conn.execute("SELECT * FROM orders ORDER BY id DESC LIMIT 50").fetchall()
+        customers = conn.execute("SELECT * FROM customers ORDER BY id DESC LIMIT 50").fetchall()
+        try:
+            tickets = conn.execute("SELECT * FROM tickets ORDER BY id DESC LIMIT 30").fetchall()
+        except Exception:
+            tickets = []
+        fat = 0.0
+        for o in orders:
+            try:
+                fat += float(o["total"] or 0)
+            except Exception:
+                pass
+        custo = fat * 0.40
+        lucro = max(0.0, fat - custo)
+        stats = {
+            "vendas": round(fat, 2),
+            "custos": round(custo, 2),
+            "lucro": round(lucro, 2),
+            "pedidos": len(orders),
+            "ticket_medio": round(fat / len(orders), 2) if orders else 0,
+        }
+        conn.close()
+        admin_photo = get_setting("admin_photo")
+        return render_template(
+            "admin.html",
+            products=products,
+            orders=orders,
+            customers=customers,
+            tickets=tickets,
+            admin_photo=admin_photo,
+            stats=stats,
+            customer=session.get("customer_name"),
+            cart_count=0,
+        )
+    except Exception as e:
+        # Evita Internal Server Error sem mensagem
+        return f"<h2>Erro no admin</h2><pre>{e}</pre><p><a href='/admin/login'>Voltar</a></p>", 500
 
 
 
@@ -781,48 +801,102 @@ def admin_profile_photo():
 @app.route("/admin/product/save", methods=["POST"])
 @admin_required
 def admin_product_save():
-    pid = request.form.get("id")
-    name = request.form.get("name", "").strip()
-    category = request.form.get("category", "Acessórios").strip()
-    color = request.form.get("color", "").strip()
-    price = float(request.form.get("price") or 0)
-    cost = request.form.get("cost")
-    cost = float(cost) if cost not in (None, "") else None
-    stock = int(request.form.get("stock") or 0)
-    description = request.form.get("description", "").strip()
-    active = 1 if request.form.get("active") == "1" else 0
+    """Salva produto de forma segura (não quebra se faltar coluna cost ou pasta upload)."""
+    try:
+        name = (request.form.get("name") or "").strip()
+        if not name:
+            flash("Nome obrigatório")
+            return redirect(url_for("admin"))
 
-    image_path = None
-    f = request.files.get("image")
-    if f and f.filename and allowed_file(f.filename):
-        fname = secure_filename(f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{f.filename}")
-        f.save(os.path.join(app.config["UPLOAD_FOLDER"], fname))
-        image_path = f"uploads/{fname}"
+        category = (request.form.get("category") or "Acessórios").strip()
+        color = (request.form.get("color") or "").strip()
+        description = (request.form.get("description") or "").strip()
+        active = 1 if request.form.get("active") == "1" else 1  # padrão ativo
 
-    conn = get_db()
-    if pid:
-        if image_path:
-            conn.execute(
-                """UPDATE products SET name=?, category=?, color=?, price=?, cost=?, stock=?,
-                   description=?, image=?, active=? WHERE id=?""",
-                (name, category, color, price, cost, stock, description, image_path, active, pid),
-            )
+        def to_float(v, default=0.0):
+            if v is None or str(v).strip() == "":
+                return default
+            try:
+                return float(str(v).replace(",", ".").strip())
+            except Exception:
+                return default
+
+        def to_int(v, default=0):
+            try:
+                return int(float(str(v).replace(",", ".").strip() or default))
+            except Exception:
+                return default
+
+        price = to_float(request.form.get("price"), 0.0)
+        cost_raw = request.form.get("cost")
+        cost = to_float(cost_raw, None) if cost_raw not in (None, "") else None
+        stock = to_int(request.form.get("stock"), 0)
+        pid = (request.form.get("id") or "").strip() or None
+
+        # Upload de imagem (opcional)
+        image_path = None
+        f = request.files.get("image")
+        if f and getattr(f, "filename", None):
+            try:
+                upload_dir = app.config.get("UPLOAD_FOLDER") or "/tmp/yob_uploads"
+                os.makedirs(upload_dir, exist_ok=True)
+                if allowed_file(f.filename):
+                    fname = secure_filename(
+                        f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{f.filename}"
+                    )
+                    f.save(os.path.join(upload_dir, fname))
+                    image_path = f"uploads/{fname}"
+            except Exception:
+                image_path = None  # continua sem foto
+
+        conn = get_db()
+        # Garante coluna cost
+        try:
+            conn.execute("ALTER TABLE products ADD COLUMN cost REAL")
+            conn.commit()
+        except Exception:
+            pass
+
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(products)").fetchall()}
+        has_cost = "cost" in cols
+        now = datetime.now().isoformat()
+
+        if pid:
+            sets = ["name=?", "category=?", "color=?", "price=?", "stock=?", "description=?", "active=?"]
+            vals = [name, category, color, price, stock, description, active]
+            if has_cost:
+                sets.append("cost=?")
+                vals.append(cost)
+            if image_path:
+                sets.append("image=?")
+                vals.append(image_path)
+            vals.append(pid)
+            conn.execute(f"UPDATE products SET {', '.join(sets)} WHERE id=?", vals)
         else:
+            fields = ["name", "category", "color", "price", "stock", "description", "image", "active", "created_at"]
+            values = [name, category, color, price, stock, description, image_path, active, now]
+            if has_cost:
+                fields.insert(4, "cost")
+                values.insert(4, cost)
+            placeholders = ",".join(["?"] * len(fields))
             conn.execute(
-                """UPDATE products SET name=?, category=?, color=?, price=?, cost=?, stock=?,
-                   description=?, active=? WHERE id=?""",
-                (name, category, color, price, cost, stock, description, active, pid),
+                f"INSERT INTO products ({','.join(fields)}) VALUES ({placeholders})",
+                values,
             )
-    else:
-        conn.execute(
-            """INSERT INTO products (name,category,color,price,cost,stock,description,image,active,created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
-            (name, category, color, price, cost, stock, description, image_path, active, datetime.now().isoformat()),
-        )
-    conn.commit()
-    conn.close()
-    flash("Produto salvo!")
-    return redirect(url_for("admin"))
+        conn.commit()
+        conn.close()
+        flash("Produto salvo com sucesso!")
+        return redirect(url_for("admin"))
+    except Exception as e:
+        try:
+            return (
+                f"<h2>Erro ao salvar produto</h2><pre>{type(e).__name__}: {e}</pre>"
+                f"<p><a href='/admin'>Voltar ao admin</a></p>",
+                500,
+            )
+        except Exception:
+            return "Erro ao salvar produto", 500
+
 
 
 @app.route("/admin/product/delete/<int:pid>")
