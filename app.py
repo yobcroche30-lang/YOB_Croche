@@ -731,14 +731,30 @@ def admin_logout():
 def admin():
     conn = get_db()
     products = conn.execute("SELECT * FROM products ORDER BY id DESC").fetchall()
-    orders = conn.execute("SELECT * FROM orders ORDER BY id DESC LIMIT 20").fetchall()
+    orders = conn.execute("SELECT * FROM orders ORDER BY id DESC LIMIT 50").fetchall()
     customers = conn.execute("SELECT * FROM customers ORDER BY id DESC LIMIT 50").fetchall()
     tickets = conn.execute("SELECT * FROM tickets ORDER BY id DESC LIMIT 30").fetchall()
+    # Lucros: faturamento, custo estimado (40% se sem cost), lucro
+    fat = sum(float(o["total"] or 0) for o in orders)
+    custo = 0.0
+    for o in orders:
+        # sem items detalhados com cost: estima 40% do total do pedido
+        custo += float(o["total"] or 0) * 0.40
+    # se produtos tiverem cost, não recalculamos item a item aqui (total já pago)
+    lucro = max(0.0, fat - custo)
+    stats = {
+        "vendas": fat,
+        "custos": custo,
+        "lucro": lucro,
+        "pedidos": len(orders),
+        "ticket_medio": (fat / len(orders)) if orders else 0,
+    }
     conn.close()
     admin_photo = get_setting("admin_photo")
     return render_template(
         "admin.html", products=products, orders=orders, customers=customers, tickets=tickets,
-        admin_photo=admin_photo, customer=session.get("customer_name"), cart_count=0
+        admin_photo=admin_photo, stats=stats,
+        customer=session.get("customer_name"), cart_count=0
     )
 
 
@@ -770,6 +786,8 @@ def admin_product_save():
     category = request.form.get("category", "Acessórios").strip()
     color = request.form.get("color", "").strip()
     price = float(request.form.get("price") or 0)
+    cost = request.form.get("cost")
+    cost = float(cost) if cost not in (None, "") else None
     stock = int(request.form.get("stock") or 0)
     description = request.form.get("description", "").strip()
     active = 1 if request.form.get("active") == "1" else 0
@@ -785,21 +803,21 @@ def admin_product_save():
     if pid:
         if image_path:
             conn.execute(
-                """UPDATE products SET name=?, category=?, color=?, price=?, stock=?,
+                """UPDATE products SET name=?, category=?, color=?, price=?, cost=?, stock=?,
                    description=?, image=?, active=? WHERE id=?""",
-                (name, category, color, price, stock, description, image_path, active, pid),
+                (name, category, color, price, cost, stock, description, image_path, active, pid),
             )
         else:
             conn.execute(
-                """UPDATE products SET name=?, category=?, color=?, price=?, stock=?,
+                """UPDATE products SET name=?, category=?, color=?, price=?, cost=?, stock=?,
                    description=?, active=? WHERE id=?""",
-                (name, category, color, price, stock, description, active, pid),
+                (name, category, color, price, cost, stock, description, active, pid),
             )
     else:
         conn.execute(
-            """INSERT INTO products (name,category,color,price,stock,description,image,active,created_at)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
-            (name, category, color, price, stock, description, image_path, active, datetime.now().isoformat()),
+            """INSERT INTO products (name,category,color,price,cost,stock,description,image,active,created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (name, category, color, price, cost, stock, description, image_path, active, datetime.now().isoformat()),
         )
     conn.commit()
     conn.close()
