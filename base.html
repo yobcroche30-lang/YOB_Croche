@@ -21,6 +21,7 @@
         <a href="{{ url_for('index') }}">Loja</a>
         <a href="{{ url_for('poster') }}">Cartaz</a>
         <a href="{{ url_for('attend') }}">Atendimento</a>
+        <a href="#" onclick="toggleAI();return false">IA</a>
         <a href="{{ url_for('rights') }}">Direitos</a>
         <a href="{{ url_for('cart_view') }}" class="cart-link">
           <i class="bi bi-cart3"></i>
@@ -56,5 +57,86 @@
       <p class="small">Feito à mão com carinho</p>
     </div>
   </footer>
+
+  <!-- YOB IA -->
+  <button type="button" class="ai-fab no-print" id="ai-fab" onclick="toggleAI()" title="YOB IA">🤖</button>
+  <div class="ai-panel no-print" id="ai-panel">
+    <div class="ai-head"><span>🤖 YOB IA</span><button type="button" onclick="toggleAI()" style="background:transparent;border:none;color:#fff;font-size:1.2rem;cursor:pointer">✕</button></div>
+    <div class="ai-body" id="ai-body"></div>
+    <div class="ai-quick" id="ai-quick"></div>
+    <div class="ai-foot">
+      <input type="text" id="ai-input" placeholder="Pergunte sobre produtos, preços..." onkeydown="if(event.key==='Enter')sendAI()">
+      <button type="button" class="btn btn-primary btn-sm" onclick="sendAI()">Enviar</button>
+    </div>
+  </div>
+  <div id="print-area"></div>
+  <script>
+  let aiOpen=false, aiProducts=[];
+  async function loadAIProducts(){
+    try{
+      const r=await fetch('/api/products');
+      const j=await r.json();
+      aiProducts=j.products||j||[];
+    }catch(e){aiProducts=[];}
+  }
+  function toggleAI(){
+    aiOpen=!aiOpen;
+    const pan=document.getElementById('ai-panel');
+    if(!pan)return;
+    pan.classList.toggle('open',aiOpen);
+    if(aiOpen){
+      loadAIProducts();
+      const body=document.getElementById('ai-body');
+      if(body && !body.dataset.ready){
+        body.dataset.ready='1';
+        addAI('bot','Olá! Sou a <strong>YOB IA</strong> 🤖🧶<br>Pergunte sobre produtos, preços, cores, entrega e descontos.');
+        const qs=['Quais produtos tem?','Preços','Desconto à vista','Entrega','Cuidados com crochê'];
+        document.getElementById('ai-quick').innerHTML=qs.map(q=>'<button type="button" onclick="askAI(\''+q.replace(/'/g,"\\'")+'\')">'+q+'</button>').join('');
+      }
+    }
+  }
+  function addAI(role,html){
+    const body=document.getElementById('ai-body'); if(!body)return;
+    const d=document.createElement('div'); d.className='ai-msg '+role; d.innerHTML=html;
+    body.appendChild(d); body.scrollTop=body.scrollHeight;
+  }
+  function askAI(t){ document.getElementById('ai-input').value=t; sendAI(); }
+  function money(v){ return 'R$ '+Number(v).toFixed(2).replace('.',','); }
+  function sendAI(){
+    const inp=document.getElementById('ai-input');
+    const t=(inp.value||'').trim(); if(!t)return;
+    inp.value=''; addAI('user', t.replace(/</g,'&lt;'));
+    setTimeout(()=>addAI('bot', yobAIReply(t)), 300);
+  }
+  function yobAIReply(q){
+    const s=q.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const list=aiProducts||[];
+    const names=list.slice(0,12).map(p=>(p.name||'')+(p.color?' ('+p.color+')':'')+' — '+money(p.price||0));
+    if(/produto|catalogo|quais|cartaz/.test(s))
+      return names.length?('Produtos:<br>• '+names.join('<br>• ')+'<br><br>Veja a <strong>Loja</strong>.'):'Veja a Loja no menu para o catálogo.';
+    if(/preco|preço|valor|quanto|bolsa/.test(s))
+      return 'Peças a partir de R$ 35. À vista: <strong>5%</strong> de R$ 60 a R$ 70 e <strong>10%</strong> acima de R$ 70.'+(names.length?'<br><br>• '+names.slice(0,5).join('<br>• '):'');
+    if(/desconto|avista|à vista|pix/.test(s))
+      return 'Desconto à vista/Pix:<br>• R$ 60–70 → 5%<br>• Acima de R$ 70 → 10%';
+    if(/cor|cores/.test(s)) return 'Nas bolsas você pode escolher a cor na página do produto.';
+    if(/entrega|frete|uber|prazo/.test(s)) return 'Retirada grátis ou Uber Flex (+R$ 5). Informe o bairro no pedido.';
+    if(/cuidado|lavar|limpar/.test(s)) return 'Lave à mão com sabão neutro, seque na sombra, não use alvejante.';
+    if(/troca|devolucao|direito|cdc/.test(s)) return 'CDC: em geral 7 dias para arrependimento em compra online. Veja Direitos no menu.';
+    if(/ola|oi|bom dia|ajuda/.test(s)) return 'Olá! 😊 Pergunte sobre produtos, preços, entrega ou descontos.';
+    return 'Posso ajudar com produtos, preços, desconto, entrega e cuidados. Ou use Atendimento / WhatsApp.';
+  }
+  function printYobReceipt(size, text){
+    text = text || (document.getElementById('receipt-text')||{}).innerText || '';
+    if(!text.trim()){ alert('Nada para imprimir'); return; }
+    const area=document.getElementById('print-area');
+    const cls=size==='58'?'print-58':(size==='80'?'print-80':'print-a4');
+    const label=size==='58'?'Papel 58mm':(size==='80'?'Papel 80mm':'A4');
+    area.className=cls;
+    area.style.display='block';
+    area.innerHTML='<div style="text-align:center"><strong>YOB_Crochê</strong><br><small>'+label+'</small></div><pre style="white-space:pre-wrap;font-family:inherit">'+text.replace(/</g,'&lt;')+'</pre>';
+    setTimeout(()=>{ window.print(); setTimeout(()=>{area.style.display='none'},400); },200);
+  }
+  </script>
+
 </body>
 </html>

@@ -626,7 +626,27 @@ def checkout():
             f"*Pagamento:* {'Pix' if payment == 'pix' else 'Combinar no WhatsApp'}\n\nAguardo confirmação! 💜"
         )
         wa_url = f"https://wa.me/{WHATSAPP}?text=" + __import__("urllib.parse").parse.quote(msg)
-        return render_template("success.html", name=name, total=total, wa_url=wa_url, customer=name)
+        receipt_text = (
+            f"COMPROVANTE YOB_Crochê\n"
+            f"Cliente: {name}\nWhatsApp: {phone}\n"
+            f"Endereço: {address or 'A combinar'}\n"
+            f"────────────────────\n"
+            + "\n".join(lines) +
+            f"\n────────────────────\n"
+            f"Entrega: {delivery_txt}\n"
+            f"TOTAL: R$ {total:.2f}\n"
+            f"Pagamento: {'Pix' if payment == 'pix' else ('À vista' if payment == 'avista' else 'WhatsApp')}\n"
+            f"Obrigada pela preferência!\nYOB_Crochê"
+        )
+        return render_template(
+            "success.html",
+            name=name,
+            total=total,
+            wa_url=wa_url,
+            customer=name,
+            receipt_text=receipt_text,
+            msg=msg,
+        )
 
     conn.close()
     return render_template(
@@ -920,6 +940,19 @@ try:
     init_db()
 except Exception as e:
     print("AVISO init_db:", e)
+
+
+
+@app.route("/api/products")
+def api_products():
+    try:
+        conn = get_db()
+        rows = conn.execute("SELECT id,name,category,color,price,description,active FROM products WHERE active=1 OR active IS NULL ORDER BY id DESC").fetchall()
+        conn.close()
+        products = [dict(r) for r in rows]
+        return jsonify({"products": products})
+    except Exception as e:
+        return jsonify({"products": [], "error": str(e)})
 
 
 @app.route("/health")

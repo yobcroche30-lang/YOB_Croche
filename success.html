@@ -24,6 +24,16 @@
       <i class="bi bi-whatsapp"></i> Abrir WhatsApp com o pedido
     </a>
     <a href="{{ url_for('index') }}" class="btn btn-outline btn-block">Continuar comprando</a>
+    <div class="no-print" style="margin-top:16px;text-align:left">
+      <strong style="color:#9B59B6">🖨️ Imprimir (Bluetooth / portátil)</strong>
+      <p style="font-size:.75rem;color:#888">Escolha o papel e a impressora Bluetooth do celular.</p>
+      <div class="print-opts">
+        <button type="button" onclick="printYobReceipt('58', document.getElementById('receipt-text') && document.getElementById('receipt-text').innerText)">58 mm</button>
+        <button type="button" onclick="printYobReceipt('80', document.getElementById('receipt-text') && document.getElementById('receipt-text').innerText)">80 mm</button>
+        <button type="button" onclick="printYobReceipt('a4', document.getElementById('receipt-text') && document.getElementById('receipt-text').innerText)">A4</button>
+      </div>
+    </div>
+    <pre id="receipt-text" class="no-print" style="display:none">{{ receipt_text or msg or '' }}</pre>
   </div>
 </div>
 {% endblock %}
