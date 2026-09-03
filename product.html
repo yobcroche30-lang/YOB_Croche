@@ -1,30 +1,126 @@
-{% extends "base.html" %}
-{% block title %}{{ product.name }} • YOB_Crochê{% endblock %}
-{% block content %}
-<div class="container" style="padding:24px 16px;">
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">
-    <div class="product-img" style="height:320px;border-radius:16px;">
-      {% if product.image %}
-      <img src="{{ url_for('static', filename=product.image) }}" alt="{{ product.name }}" style="width:100%;height:100%;object-fit:cover;border-radius:16px;">
-      {% else %}
-      <span style="font-size:5rem;">🧶</span>
-      {% endif %}
-    </div>
-    <div>
-      <span class="product-cat">{{ product.category }}</span>
-      <h1 style="margin:8px 0;">{{ product.name }}</h1>
-      <p style="color:#888;">{{ product.color or '' }}</p>
-      <div class="product-price" style="font-size:1.5rem;margin:12px 0;">R$ {{ '%.2f'|format(product.price) }}</div>
-      <p style="color:#555;margin-bottom:12px;">{{ product.description or 'Peça artesanal em crochê.' }}</p>
-      <p style="font-size:0.9rem;color:#888;margin-bottom:16px;">Estoque: {{ product.stock }}</p>
-      <form method="post" action="{{ url_for('cart_add', pid=product.id) }}" style="display:flex;gap:10px;align-items:center;">
-        <input type="number" name="qty" value="1" min="1" max="{{ product.stock }}" style="width:70px;padding:10px;border-radius:8px;border:1px solid #ddd;">
-        <button type="submit" class="btn btn-primary">Adicionar ao carrinho</button>
-      </form>
-      <br>
-      <a href="{{ url_for('index') }}" class="btn btn-outline btn-sm">← Voltar</a>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Produto • YOB_Crochê{% endblock %}</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<style>
+  .color-pick{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+  .color-dot{
+    width:36px;height:36px;border-radius:50%;
+    border:3px solid #ddd;cursor:pointer;
+    box-shadow:0 2px 6px rgba(0,0,0,.15);
+  }
+  .color-dot.sel{border-color:#9B59B6;box-shadow:0 0 0 3px rgba(155,89,182,.35)}
+  .color-label{font-size:.9rem;color:#666;margin-bottom:6px}
+  .prod-box{max-width:520px;margin:0 auto;padding:16px}
+  .prod-img{width:100%;border-radius:16px;max-height:340px;object-fit:cover;background:#f3e8ff}
+  .prod-title{font-size:1.25rem;font-weight:700;margin:12px 0 4px;color:#333}
+  .prod-price{font-size:1.4rem;font-weight:800;color:#9B59B6}
+  .prod-desc{color:#555;font-size:.9rem;margin:8px 0 14px;line-height:1.5}
+  .btn-add{
+    width:100%;padding:14px;border:none;border-radius:12px;
+    background:linear-gradient(90deg,#9B59B6,#E91E63);color:#fff;
+    font-weight:700;font-size:1rem;cursor:pointer;margin-top:12px
+  }
+  .qty-row{display:flex;align-items:center;gap:12px;margin:12px 0}
+  .qty-row input{width:70px;padding:10px;border:2px solid #ddd;border-radius:10px;text-align:center}
+  .back{display:inline-block;margin:12px 16px;color:#9B59B6;text-decoration:none;font-weight:600}
+</style>
+</head>
+<body>
+{% if not hide_nav %}
+<nav class="navbar">
+  <div class="container nav-content">
+    <a href="{{ url_for('index') }}" class="logo">🧶 YOB_Crochê</a>
+    <div class="nav-links">
+      <a href="{{ url_for('index') }}">Loja</a>
+      <a href="{{ url_for('cart_view') }}" class="cart-link"><i class="bi bi-cart3"></i></a>
     </div>
   </div>
+</nav>
+{% endif %}
+
+<a class="back" href="{{ url_for('index') }}">← Voltar à loja</a>
+
+<div class="prod-box">
+  {% if product.image %}
+  <img class="prod-img" src="{{ url_for('uploaded_file', filename=product.image.replace('uploads/','')) if product.image.startswith('uploads/') else product.image }}" alt="{{ product.name }}">
+  {% else %}
+  <div class="prod-img" style="display:flex;align-items:center;justify-content:center;color:#bbb;font-size:3rem">🧶</div>
+  {% endif %}
+
+  <div class="prod-title">{{ product.name }}</div>
+  <div class="prod-price">R$ {{ '%.2f'|format(product.price) }}</div>
+  {% if product.color %}
+  <p style="color:#888;font-size:.9rem">Cor cadastrada: {{ product.color }}</p>
+  {% endif %}
+  <div class="prod-desc">{{ product.description or '' }}</div>
+
+  <form method="post" action="{{ url_for('add_to_cart') }}" id="buyForm">
+    <input type="hidden" name="product_id" value="{{ product.id }}">
+    <input type="hidden" name="color" id="colorInput" value="">
+
+    <div class="color-label"><strong>Escolha a cor da bolsa:</strong></div>
+    <div class="color-pick" id="colorDots">
+      <!-- bolinhas preenchidas por JS -->
+    </div>
+    <div class="color-label" id="colorName">Selecione uma cor</div>
+
+    <div class="qty-row">
+      <label>Qtd:</label>
+      <input type="number" name="qty" value="1" min="1" max="20">
+    </div>
+
+    <button type="submit" class="btn-add" id="btnAdd" disabled>Adicionar ao carrinho</button>
+  </form>
 </div>
-<style>@media(max-width:700px){div[style*="grid-template-columns"]{grid-template-columns:1fr!important;}}</style>
-{% endblock %}
+
+<script>
+const CORES = [
+  {nome:'Cinza', hex:'#9ca3af'},
+  {nome:'Marrom', hex:'#7c4a2d'},
+  {nome:'Preto', hex:'#1f1f1f'},
+  {nome:'Branco', hex:'#f5f5f5'},
+  {nome:'Rosa', hex:'#ec4899'},
+  {nome:'Verde', hex:'#22c55e'},
+  {nome:'Azul', hex:'#3b82f6'},
+  {nome:'Bege', hex:'#e7d3b0'}
+];
+
+// Se o produto já tem cor única cadastrada, destaca ela; senão mostra todas
+const corProduto = {{ (product.color or '')|tojson }};
+let lista = CORES;
+if(corProduto && corProduto.trim()){
+  // ainda mostra todas para o cliente escolher (porta-celular)
+  lista = CORES;
+}
+
+const dots = document.getElementById('colorDots');
+const colorInput = document.getElementById('colorInput');
+const colorName = document.getElementById('colorName');
+const btnAdd = document.getElementById('btnAdd');
+let selected = null;
+
+function render(){
+  dots.innerHTML = lista.map(c => {
+    const sel = selected === c.nome ? 'sel' : '';
+    return `<div class="color-dot ${sel}" style="background:${c.hex}" title="${c.nome}" data-nome="${c.nome}"></div>`;
+  }).join('');
+  document.querySelectorAll('.color-dot').forEach(el => {
+    el.onclick = () => {
+      selected = el.dataset.nome;
+      colorInput.value = selected;
+      colorName.textContent = 'Cor escolhida: ' + selected;
+      btnAdd.disabled = false;
+      render();
+    };
+  });
+}
+render();
+</script>
+</body>
+</html>
