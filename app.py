@@ -943,6 +943,111 @@ except Exception as e:
 
 
 
+
+@app.route("/admin/backup/export")
+@admin_required
+def admin_backup_export():
+    """Baixa JSON com produtos, pedidos e clientes (backup)."""
+    import json
+    from flask import Response
+    conn = get_db()
+    products = [dict(r) for r in conn.execute("SELECT * FROM products").fetchall()]
+    try:
+        orders = [dict(r) for r in conn.execute("SELECT * FROM orders").fetchall()]
+    except Exception:
+        orders = []
+    try:
+        customers = [dict(r) for r in conn.execute("SELECT id,name,contact,contact_type,created_at FROM customers").fetchall()]
+    except Exception:
+        customers = []
+    conn.close()
+    payload = {
+        "app": "YOB_Croche",
+        "exported_at": datetime.now().isoformat(),
+        "products": products,
+        "orders": orders,
+        "customers": customers,
+    }
+    data = json.dumps(payload, ensure_ascii=False, indent=2)
+    fname = f"yob_backup_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
+    return Response(
+        data,
+        mimetype="application/json",
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
+    )
+
+
+@app.route("/admin/backup/import", methods=["POST"])
+@admin_required
+def admin_backup_import():
+    """Restaura produtos a partir de JSON de backup."""
+    import json
+    f = request.files.get("backup")
+    if not f or not f.filename:
+        flash("Selecione um arquivo JSON de backup")
+        return redirect(url_for("admin"))
+    try:
+        raw = f.read().decode("utf-8")
+        data = json.loads(raw)
+    except Exception as e:
+        flash(f"Arquivo inválido: {e}")
+        return redirect(url_for("admin"))
+    products = data.get("products") or []
+    if not products:
+        flash("Backup sem produtos")
+        return redirect(url_for("admin"))
+    conn = get_db()
+    # Garante coluna cost
+    try:
+        conn.execute("ALTER TABLE products ADD COLUMN cost REAL")
+        conn.commit()
+    except Exception:
+        pass
+    restored = 0
+    for p in products:
+        name = (p.get("name") or "").strip()
+        if not name:
+            continue
+        category = p.get("category") or "Acessórios"
+        color = p.get("color") or ""
+        price = float(p.get("price") or 0)
+        cost = p.get("cost")
+        stock = int(p.get("stock") or 0)
+        description = p.get("description") or ""
+        image = p.get("image")
+        active = 1 if p.get("active", 1) in (1, True, "1") else 0
+        created = p.get("created_at") or datetime.now().isoformat()
+        # evita duplicar pelo mesmo nome+cor+preço se já existir
+        exists = conn.execute(
+            "SELECT id FROM products WHERE name=? AND ifnull(color,'')=? AND price=?",
+            (name, color, price),
+        ).fetchone()
+        if exists:
+            conn.execute(
+                """UPDATE products SET category=?, stock=?, description=?, image=COALESCE(?, image),
+                   active=?, cost=? WHERE id=?""",
+                (category, stock, description, image, active, cost, exists["id"]),
+            )
+        else:
+            try:
+                conn.execute(
+                    """INSERT INTO products (name,category,color,price,cost,stock,description,image,active,created_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    (name, category, color, price, cost, stock, description, image, active, created),
+                )
+            except Exception:
+                conn.execute(
+                    """INSERT INTO products (name,category,color,price,stock,description,image,active,created_at)
+                       VALUES (?,?,?,?,?,?,?,?,?)""",
+                    (name, category, color, price, stock, description, image, active, created),
+                )
+        restored += 1
+    conn.commit()
+    conn.close()
+    flash(f"Backup restaurado: {restored} produto(s)")
+    return redirect(url_for("admin"))
+
+
 @app.route("/api/products")
 def api_products():
     try:
