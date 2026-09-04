@@ -4,36 +4,28 @@
 {% block content %}
 <div class="container">
   <div class="thanks-box text-center">
-    <svg width="70" height="70" viewBox="0 0 100 100" style="margin-bottom:8px;">
-      <defs>
-        <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color:#FF8A00"/>
-          <stop offset="50%" style="stop-color:#E91E63"/>
-          <stop offset="100%" style="stop-color:#9B59B6"/>
-        </linearGradient>
-      </defs>
-      <polygon points="50,8 92,85 8,85" fill="none" stroke="url(#g2)" stroke-width="10" stroke-linejoin="round"/>
-      <polygon points="50,28 72,70 28,70" fill="url(#g2)"/>
-    </svg>
     <div class="success-icon"><i class="bi bi-check-circle-fill"></i></div>
     <h2 style="color:#9B59B6;">Obrigada!</h2>
     <p style="color:#666;margin:10px 0;">Agradecemos por acessar nossos produtos e pela sua compra 💜</p>
     <p>Pedido de <strong>{{ name }}</strong><br>Total: <strong>R$ {{ '%.2f'|format(total) }}</strong></p>
-    <br>
+    <div id="receipt-box" style="text-align:left;background:#f8f9fa;padding:12px;border-radius:10px;margin:12px 0;font-size:.85rem;white-space:pre-wrap;max-height:240px;overflow:auto">{{ receipt_text or msg or '' }}</div>
     <a href="{{ wa_url }}" target="_blank" class="btn btn-primary btn-block" style="margin-bottom:10px;">
-      <i class="bi bi-whatsapp"></i> Abrir WhatsApp com o pedido
+      <i class="bi bi-whatsapp"></i> Enviar comprovante no WhatsApp
     </a>
-    <a href="{{ url_for('index') }}" class="btn btn-outline btn-block">Continuar comprando</a>
+    {% if email_url %}
+    <a href="{{ email_url }}" class="btn btn-outline btn-block" style="margin-bottom:10px;">✉️ Enviar comprovante por e-mail</a>
+    {% endif %}
     <div class="no-print" style="margin-top:16px;text-align:left">
       <strong style="color:#9B59B6">🖨️ Imprimir (Bluetooth / portátil)</strong>
       <p style="font-size:.75rem;color:#888">Escolha o papel e a impressora Bluetooth do celular.</p>
       <div class="print-opts">
-        <button type="button" onclick="printYobReceipt('58', document.getElementById('receipt-text') && document.getElementById('receipt-text').innerText)">58 mm</button>
-        <button type="button" onclick="printYobReceipt('80', document.getElementById('receipt-text') && document.getElementById('receipt-text').innerText)">80 mm</button>
-        <button type="button" onclick="printYobReceipt('a4', document.getElementById('receipt-text') && document.getElementById('receipt-text').innerText)">A4</button>
+        <button type="button" onclick="printYobReceipt('58')">58 mm</button>
+        <button type="button" onclick="printYobReceipt('80')">80 mm</button>
+        <button type="button" onclick="printYobReceipt('a4')">A4</button>
       </div>
     </div>
     <pre id="receipt-text" class="no-print" style="display:none">{{ receipt_text or msg or '' }}</pre>
+    <a href="{{ url_for('index') }}" class="btn btn-outline btn-block" style="margin-top:12px">Continuar comprando</a>
   </div>
 </div>
 {% endblock %}

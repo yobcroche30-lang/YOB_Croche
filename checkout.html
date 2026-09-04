@@ -14,12 +14,16 @@
         <input type="tel" name="phone" required value="{{ customer_contact or '' }}">
       </div>
       <div class="form-group">
+        <label>E-mail (para comprovante)</label>
+        <input type="email" name="email" value="" placeholder="seu@email.com">
+      </div>
+      <div class="form-group">
         <label>Endereço / Bairro</label>
         <textarea name="address" rows="2" placeholder="Para entrega Uber Flex"></textarea>
       </div>
       <div class="form-group">
         <label>Forma de entrega</label>
-        <select name="delivery" id="delivery" onchange="updFee()">
+        <select name="delivery" id="delivery" onchange="updTotals()">
           <option value="retirada">Retirada no local (grátis)</option>
           <option value="uber">Uber Flex / Entrega (+ R$ 5,00)</option>
         </select>
@@ -27,26 +31,45 @@
       </div>
       <div class="form-group">
         <label>Forma de pagamento</label>
-        <select name="payment">
+        <select name="payment" id="payment" onchange="updTotals()">
+          <option value="avista">À vista / Pix (com desconto)</option>
           <option value="pix">Pix</option>
           <option value="whatsapp">Combinar no WhatsApp</option>
         </select>
       </div>
-      <div style="text-align:right;margin:14px 0;">
-        Subtotal: R$ {{ '%.2f'|format(subtotal) }}<br>
+      <div style="text-align:right;margin:14px 0;line-height:1.7;">
+        Subtotal: <span id="sub-label">R$ {{ '%.2f'|format(subtotal) }}</span><br>
         Entrega: <span id="fee-label">R$ 0,00</span><br>
+        Desconto à vista: <span id="disc-label">R$ 0,00</span><br>
         <strong>Total: <span id="total-label">R$ {{ '%.2f'|format(subtotal) }}</span></strong>
       </div>
+      <p style="font-size:.8rem;color:#2E7D32;background:#E8F5E9;padding:10px;border-radius:10px;">
+        💰 À vista: <strong>5%</strong> de R$ 60 a R$ 70 · <strong>10%</strong> acima de R$ 70
+      </p>
       <button type="submit" class="btn btn-primary btn-block">Confirmar Pedido</button>
     </form>
   </div>
 </div>
 <script>
 const sub = {{ subtotal }};
-function updFee() {
-  const fee = document.getElementById("delivery").value === "uber" ? 5 : 0;
-  document.getElementById("fee-label").textContent = "R$ " + fee.toFixed(2).replace(".", ",");
-  document.getElementById("total-label").textContent = "R$ " + (sub + fee).toFixed(2).replace(".", ",");
+function calcDiscount(subtotal, payment) {
+  if (payment !== "avista" && payment !== "pix") return 0;
+  if (subtotal >= 70) return Math.round(subtotal * 0.10 * 100) / 100;
+  if (subtotal >= 60) return Math.round(subtotal * 0.05 * 100) / 100;
+  return 0;
 }
+function money(v) {
+  return "R$ " + Number(v).toFixed(2).replace(".", ",");
+}
+function updTotals() {
+  const fee = document.getElementById("delivery").value === "uber" ? 5 : 0;
+  const payment = document.getElementById("payment").value;
+  const disc = calcDiscount(sub, payment);
+  const total = Math.max(0, sub + fee - disc);
+  document.getElementById("fee-label").textContent = money(fee);
+  document.getElementById("disc-label").textContent = money(disc);
+  document.getElementById("total-label").textContent = money(total);
+}
+updTotals();
 </script>
 {% endblock %}
