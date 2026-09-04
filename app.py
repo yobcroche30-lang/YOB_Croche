@@ -519,12 +519,24 @@ def product_detail(pid):
 @app.route("/cart/add/<int:pid>", methods=["POST"])
 @customer_required
 def cart_add(pid):
-    qty = int(request.form.get("qty", 1) or 1)
+    try:
+        qty = int(request.form.get("qty", 1) or 1)
+    except Exception:
+        qty = 1
+    if qty < 1:
+        qty = 1
+    color = (request.form.get("color") or "").strip()
     cart = session.get("cart", {})
-    key = str(pid)
+    # chave inclui cor para permitir mesma peça em cores diferentes
+    key = str(pid) + (("|" + color) if color else "")
     cart[key] = cart.get(key, 0) + qty
     session["cart"] = cart
-    flash("Adicionado ao carrinho!")
+    # guarda cores escolhidas
+    colors = session.get("cart_colors", {})
+    if color:
+        colors[key] = color
+    session["cart_colors"] = colors
+    flash("Adicionado ao carrinho!" + (f" Cor: {color}" if color else ""))
     return redirect(request.referrer or url_for("index"))
 
 
@@ -532,15 +544,22 @@ def cart_add(pid):
 @customer_required
 def cart_view():
     cart = session.get("cart", {})
+    colors = session.get("cart_colors", {})
     items = []
     total = 0
     conn = get_db()
-    for pid, qty in cart.items():
-        p = conn.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
-        if p:
-            sub = p["price"] * qty
+    for key, qty in cart.items():
+        pid = str(key).split("|")[0]
+        try:
+            pid_int = int(pid)
+        except Exception:
+            continue
+        row = conn.execute("SELECT * FROM products WHERE id=?", (pid_int,)).fetchone()
+        if row:
+            sub = row["price"] * qty
             total += sub
-            items.append({"product": p, "qty": qty, "subtotal": sub})
+            chosen = colors.get(key) or (str(key).split("|")[1] if "|" in str(key) else (row["color"] or ""))
+            items.append({"product": row, "qty": qty, "subtotal": sub, "chosen_color": chosen, "cart_key": key})
     conn.close()
     return render_template(
         "cart.html", items=items, total=total,
@@ -548,12 +567,15 @@ def cart_view():
     )
 
 
-@app.route("/cart/remove/<int:pid>")
+@app.route("/cart/remove/<path:key>")
 @customer_required
-def cart_remove(pid):
+def cart_remove(key):
     cart = session.get("cart", {})
-    cart.pop(str(pid), None)
+    cart.pop(str(key), None)
     session["cart"] = cart
+    colors = session.get("cart_colors", {})
+    colors.pop(str(key), None)
+    session["cart_colors"] = colors
     return redirect(url_for("cart_view"))
 
 
@@ -568,12 +590,19 @@ def checkout():
     conn = get_db()
     items = []
     subtotal = 0
-    for pid, qty in cart.items():
-        p = conn.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
+    colors = session.get("cart_colors", {})
+    for key, qty in cart.items():
+        pid = str(key).split("|")[0]
+        try:
+            pid_int = int(pid)
+        except Exception:
+            continue
+        p = conn.execute("SELECT * FROM products WHERE id=?", (pid_int,)).fetchone()
         if p:
             sub = p["price"] * qty
             subtotal += sub
-            items.append({"product": p, "qty": qty, "subtotal": sub})
+            chosen = colors.get(key) or (str(key).split("|")[1] if "|" in str(key) else (p["color"] or ""))
+            items.append({"product": p, "qty": qty, "subtotal": sub, "chosen_color": chosen})
 
     if request.method == "POST":
         name = request.form.get("name", session.get("customer_name", "")).strip()
@@ -595,7 +624,7 @@ def checkout():
         import json
         items_json = json.dumps([
             {"id": i["product"]["id"], "name": i["product"]["name"],
-             "color": i["product"]["color"], "qty": i["qty"], "price": i["product"]["price"]}
+             "color": i.get("chosen_color") or i["product"]["color"], "qty": i["qty"], "price": i["product"]["price"]}
             for i in items
         ], ensure_ascii=False)
         now = datetime.now().isoformat()
