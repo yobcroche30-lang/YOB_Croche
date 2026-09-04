@@ -526,16 +526,17 @@ def cart_add(pid):
     if qty < 1:
         qty = 1
     color = (request.form.get("color") or "").strip()
-    cart = session.get("cart", {})
-    # chave inclui cor para permitir mesma peça em cores diferentes
+    cart = session.get("cart", {}) or {}
     key = str(pid) + (("|" + color) if color else "")
-    cart[key] = cart.get(key, 0) + qty
+    try:
+        cart[key] = int(cart.get(key, 0) or 0) + qty
+    except Exception:
+        cart[key] = qty
     session["cart"] = cart
-    # guarda cores escolhidas
-    colors = session.get("cart_colors", {})
+    colors = session.get("cart_colors", {}) or {}
     if color:
         colors[key] = color
-    session["cart_colors"] = colors
+        session["cart_colors"] = colors
     flash("Adicionado ao carrinho!" + (f" Cor: {color}" if color else ""))
     return redirect(request.referrer or url_for("index"))
 
@@ -543,40 +544,90 @@ def cart_add(pid):
 @app.route("/cart")
 @customer_required
 def cart_view():
-    cart = session.get("cart", {})
-    colors = session.get("cart_colors", {})
-    items = []
-    total = 0
-    conn = get_db()
-    for key, qty in cart.items():
-        pid = str(key).split("|")[0]
-        try:
-            pid_int = int(pid)
-        except Exception:
-            continue
-        row = conn.execute("SELECT * FROM products WHERE id=?", (pid_int,)).fetchone()
-        if row:
-            sub = row["price"] * qty
+    """Carrinho seguro — não quebra com chaves antigas ou com cor."""
+    try:
+        cart = session.get("cart", {}) or {}
+        colors = session.get("cart_colors", {}) or {}
+        items = []
+        total = 0.0
+        conn = get_db()
+        for key, qty in list(cart.items()):
+            try:
+                qty = int(qty)
+            except Exception:
+                qty = 1
+            pid_str = str(key).split("|")[0].strip()
+            try:
+                pid_int = int(pid_str)
+            except Exception:
+                continue
+            try:
+                row = conn.execute("SELECT * FROM products WHERE id=?", (pid_int,)).fetchone()
+            except Exception:
+                row = None
+            if not row:
+                continue
+            try:
+                price = float(row["price"] or 0)
+            except Exception:
+                price = 0.0
+            sub = price * qty
             total += sub
-            chosen = colors.get(key) or (str(key).split("|")[1] if "|" in str(key) else (row["color"] or ""))
-            items.append({"product": row, "qty": qty, "subtotal": sub, "chosen_color": chosen, "cart_key": key})
-    conn.close()
-    return render_template(
-        "cart.html", items=items, total=total,
-        cart_count=sum(cart.values()), customer=session.get("customer_name"),
-    )
+            chosen = colors.get(str(key)) or colors.get(key)
+            if not chosen and "|" in str(key):
+                chosen = str(key).split("|", 1)[1]
+            if not chosen:
+                try:
+                    chosen = row["color"] or ""
+                except Exception:
+                    chosen = ""
+            # Row -> dict-like for template safety
+            prod = {
+                "id": row["id"],
+                "name": row["name"],
+                "price": price,
+                "color": row["color"] if "color" in row.keys() else "",
+                "image": row["image"] if "image" in row.keys() else None,
+            }
+            items.append({
+                "product": prod,
+                "qty": qty,
+                "subtotal": sub,
+                "chosen_color": chosen,
+                "cart_key": str(key),
+            })
+        conn.close()
+        return render_template(
+            "cart.html",
+            items=items,
+            total=total,
+            cart_count=sum(int(v or 0) for v in cart.values()) if cart else 0,
+            customer=session.get("customer_name"),
+        )
+    except Exception as e:
+        try:
+            return (
+                f"<h2>Erro no carrinho</h2><pre>{type(e).__name__}: {e}</pre>"
+                f"<p><a href='/'>Voltar à loja</a></p>",
+                500,
+            )
+        except Exception:
+            return "Erro no carrinho", 500
 
 
 @app.route("/cart/remove/<path:key>")
 @customer_required
 def cart_remove(key):
-    cart = session.get("cart", {})
+    cart = session.get("cart", {}) or {}
     cart.pop(str(key), None)
+    # também tenta só o id
+    cart.pop(str(key).split("|")[0], None)
     session["cart"] = cart
-    colors = session.get("cart_colors", {})
+    colors = session.get("cart_colors", {}) or {}
     colors.pop(str(key), None)
     session["cart_colors"] = colors
     return redirect(url_for("cart_view"))
+
 
 
 @app.route("/checkout", methods=["GET", "POST"])
@@ -590,19 +641,12 @@ def checkout():
     conn = get_db()
     items = []
     subtotal = 0
-    colors = session.get("cart_colors", {})
-    for key, qty in cart.items():
-        pid = str(key).split("|")[0]
-        try:
-            pid_int = int(pid)
-        except Exception:
-            continue
-        p = conn.execute("SELECT * FROM products WHERE id=?", (pid_int,)).fetchone()
+    for pid, qty in cart.items():
+        p = conn.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
         if p:
             sub = p["price"] * qty
             subtotal += sub
-            chosen = colors.get(key) or (str(key).split("|")[1] if "|" in str(key) else (p["color"] or ""))
-            items.append({"product": p, "qty": qty, "subtotal": sub, "chosen_color": chosen})
+            items.append({"product": p, "qty": qty, "subtotal": sub})
 
     if request.method == "POST":
         name = request.form.get("name", session.get("customer_name", "")).strip()
@@ -624,7 +668,7 @@ def checkout():
         import json
         items_json = json.dumps([
             {"id": i["product"]["id"], "name": i["product"]["name"],
-             "color": i.get("chosen_color") or i["product"]["color"], "qty": i["qty"], "price": i["product"]["price"]}
+             "color": i["product"]["color"], "qty": i["qty"], "price": i["product"]["price"]}
             for i in items
         ], ensure_ascii=False)
         now = datetime.now().isoformat()
@@ -655,27 +699,7 @@ def checkout():
             f"*Pagamento:* {'Pix' if payment == 'pix' else 'Combinar no WhatsApp'}\n\nAguardo confirmação! 💜"
         )
         wa_url = f"https://wa.me/{WHATSAPP}?text=" + __import__("urllib.parse").parse.quote(msg)
-        receipt_text = (
-            f"COMPROVANTE YOB_Crochê\n"
-            f"Cliente: {name}\nWhatsApp: {phone}\n"
-            f"Endereço: {address or 'A combinar'}\n"
-            f"────────────────────\n"
-            + "\n".join(lines) +
-            f"\n────────────────────\n"
-            f"Entrega: {delivery_txt}\n"
-            f"TOTAL: R$ {total:.2f}\n"
-            f"Pagamento: {'Pix' if payment == 'pix' else ('À vista' if payment == 'avista' else 'WhatsApp')}\n"
-            f"Obrigada pela preferência!\nYOB_Crochê"
-        )
-        return render_template(
-            "success.html",
-            name=name,
-            total=total,
-            wa_url=wa_url,
-            customer=name,
-            receipt_text=receipt_text,
-            msg=msg,
-        )
+        return render_template("success.html", name=name, total=total, wa_url=wa_url, customer=name)
 
     conn.close()
     return render_template(
@@ -969,124 +993,6 @@ try:
     init_db()
 except Exception as e:
     print("AVISO init_db:", e)
-
-
-
-
-@app.route("/admin/backup/export")
-@admin_required
-def admin_backup_export():
-    """Baixa JSON com produtos, pedidos e clientes (backup)."""
-    import json
-    from flask import Response
-    conn = get_db()
-    products = [dict(r) for r in conn.execute("SELECT * FROM products").fetchall()]
-    try:
-        orders = [dict(r) for r in conn.execute("SELECT * FROM orders").fetchall()]
-    except Exception:
-        orders = []
-    try:
-        customers = [dict(r) for r in conn.execute("SELECT id,name,contact,contact_type,created_at FROM customers").fetchall()]
-    except Exception:
-        customers = []
-    conn.close()
-    payload = {
-        "app": "YOB_Croche",
-        "exported_at": datetime.now().isoformat(),
-        "products": products,
-        "orders": orders,
-        "customers": customers,
-    }
-    data = json.dumps(payload, ensure_ascii=False, indent=2)
-    fname = f"yob_backup_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
-    return Response(
-        data,
-        mimetype="application/json",
-        headers={"Content-Disposition": f"attachment; filename={fname}"},
-    )
-
-
-@app.route("/admin/backup/import", methods=["POST"])
-@admin_required
-def admin_backup_import():
-    """Restaura produtos a partir de JSON de backup."""
-    import json
-    f = request.files.get("backup")
-    if not f or not f.filename:
-        flash("Selecione um arquivo JSON de backup")
-        return redirect(url_for("admin"))
-    try:
-        raw = f.read().decode("utf-8")
-        data = json.loads(raw)
-    except Exception as e:
-        flash(f"Arquivo inválido: {e}")
-        return redirect(url_for("admin"))
-    products = data.get("products") or []
-    if not products:
-        flash("Backup sem produtos")
-        return redirect(url_for("admin"))
-    conn = get_db()
-    # Garante coluna cost
-    try:
-        conn.execute("ALTER TABLE products ADD COLUMN cost REAL")
-        conn.commit()
-    except Exception:
-        pass
-    restored = 0
-    for p in products:
-        name = (p.get("name") or "").strip()
-        if not name:
-            continue
-        category = p.get("category") or "Acessórios"
-        color = p.get("color") or ""
-        price = float(p.get("price") or 0)
-        cost = p.get("cost")
-        stock = int(p.get("stock") or 0)
-        description = p.get("description") or ""
-        image = p.get("image")
-        active = 1 if p.get("active", 1) in (1, True, "1") else 0
-        created = p.get("created_at") or datetime.now().isoformat()
-        # evita duplicar pelo mesmo nome+cor+preço se já existir
-        exists = conn.execute(
-            "SELECT id FROM products WHERE name=? AND ifnull(color,'')=? AND price=?",
-            (name, color, price),
-        ).fetchone()
-        if exists:
-            conn.execute(
-                """UPDATE products SET category=?, stock=?, description=?, image=COALESCE(?, image),
-                   active=?, cost=? WHERE id=?""",
-                (category, stock, description, image, active, cost, exists["id"]),
-            )
-        else:
-            try:
-                conn.execute(
-                    """INSERT INTO products (name,category,color,price,cost,stock,description,image,active,created_at)
-                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                    (name, category, color, price, cost, stock, description, image, active, created),
-                )
-            except Exception:
-                conn.execute(
-                    """INSERT INTO products (name,category,color,price,stock,description,image,active,created_at)
-                       VALUES (?,?,?,?,?,?,?,?,?)""",
-                    (name, category, color, price, stock, description, image, active, created),
-                )
-        restored += 1
-    conn.commit()
-    conn.close()
-    flash(f"Backup restaurado: {restored} produto(s)")
-    return redirect(url_for("admin"))
-
-
-@app.route("/api/products")
-def api_products():
-    try:
-        conn = get_db()
-        rows = conn.execute("SELECT id,name,category,color,price,description,active FROM products WHERE active=1 OR active IS NULL ORDER BY id DESC").fetchall()
-        conn.close()
-        products = [dict(r) for r in rows]
-        return jsonify({"products": products})
-    except Exception as e:
-        return jsonify({"products": [], "error": str(e)})
 
 
 @app.route("/health")
