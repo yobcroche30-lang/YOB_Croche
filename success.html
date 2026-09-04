@@ -8,7 +8,7 @@
     <h2 style="color:#9B59B6;">Obrigada!</h2>
     <p style="color:#666;margin:10px 0;">Agradecemos por acessar nossos produtos e pela sua compra 💜</p>
     <p>Pedido de <strong>{{ name }}</strong><br>Total: <strong>R$ {{ '%.2f'|format(total) }}</strong></p>
-    <div id="receipt-box" style="text-align:left;background:#f8f9fa;padding:12px;border-radius:10px;margin:12px 0;font-size:.85rem;white-space:pre-wrap;max-height:240px;overflow:auto">{{ receipt_text or msg or '' }}</div>
+    <div style="text-align:left;background:#f8f9fa;padding:12px;border-radius:10px;margin:12px 0;font-size:.85rem;white-space:pre-wrap;max-height:240px;overflow:auto">{{ receipt_text or msg or '' }}</div>
     <a href="{{ wa_url }}" target="_blank" class="btn btn-primary btn-block" style="margin-bottom:10px;">
       <i class="bi bi-whatsapp"></i> Enviar comprovante no WhatsApp
     </a>

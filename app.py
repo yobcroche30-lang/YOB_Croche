@@ -633,52 +633,91 @@ def cart_remove(key):
 @app.route("/checkout", methods=["GET", "POST"])
 @customer_required
 def checkout():
-    cart = session.get("cart", {})
+    cart = session.get("cart", {}) or {}
     if not cart:
         flash("Carrinho vazio")
         return redirect(url_for("index"))
 
     conn = get_db()
     items = []
-    subtotal = 0
-    for pid, qty in cart.items():
-        p = conn.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
-        if p:
-            sub = p["price"] * qty
+    subtotal = 0.0
+    colors = session.get("cart_colors", {}) or {}
+    for key, qty in list(cart.items()):
+        try:
+            qty = int(qty)
+        except Exception:
+            qty = 1
+        pid_str = str(key).split("|")[0].strip()
+        try:
+            pid_int = int(pid_str)
+        except Exception:
+            continue
+        row = conn.execute("SELECT * FROM products WHERE id=?", (pid_int,)).fetchone()
+        if row:
+            sub = float(row["price"] or 0) * qty
             subtotal += sub
-            items.append({"product": p, "qty": qty, "subtotal": sub})
+            chosen = colors.get(str(key)) or colors.get(key)
+            if not chosen and "|" in str(key):
+                chosen = str(key).split("|", 1)[1]
+            if not chosen:
+                try:
+                    chosen = row["color"] or ""
+                except Exception:
+                    chosen = ""
+            items.append({
+                "product": row,
+                "qty": qty,
+                "subtotal": sub,
+                "chosen_color": chosen,
+            })
+
+    def calc_discount(sub, payment):
+        if payment not in ("avista", "pix"):
+            return 0.0
+        if sub >= 70:
+            return round(sub * 0.10, 2)
+        if sub >= 60:
+            return round(sub * 0.05, 2)
+        return 0.0
 
     if request.method == "POST":
         name = request.form.get("name", session.get("customer_name", "")).strip()
         phone = request.form.get("phone", session.get("customer_contact", "")).strip()
+        email = (request.form.get("email") or "").strip()
         address = request.form.get("address", "").strip()
         delivery = request.form.get("delivery", "retirada")
-        payment = request.form.get("payment", "pix")
+        payment = request.form.get("payment", "avista")
         fee = 5.0 if delivery == "uber" else 0.0
+        discount = calc_discount(subtotal, payment)
         if delivery == "uber" and not address:
             flash("Informe o endereço para entrega Uber Flex")
             conn.close()
             return render_template(
                 "checkout.html", items=items, subtotal=subtotal, fee=fee,
-                total=subtotal + fee, cart_count=sum(cart.values()),
+                total=max(0, subtotal + fee - discount),
+                cart_count=sum(int(v or 0) for v in cart.values()) if cart else 0,
                 customer=session.get("customer_name"),
                 customer_contact=session.get("customer_contact"),
             )
-        total = subtotal + fee
+        total = max(0.0, subtotal + fee - discount)
         import json
         items_json = json.dumps([
-            {"id": i["product"]["id"], "name": i["product"]["name"],
-             "color": i["product"]["color"], "qty": i["qty"], "price": i["product"]["price"]}
+            {
+                "id": i["product"]["id"],
+                "name": i["product"]["name"],
+                "color": i.get("chosen_color") or "",
+                "qty": i["qty"],
+                "price": float(i["product"]["price"] or 0),
+            }
             for i in items
         ], ensure_ascii=False)
         now = datetime.now().isoformat()
         conn.execute(
-            """INSERT INTO orders (customer_id, customer_name, customer_phone, address,
-               delivery_method, delivery_fee, payment_method, total, items_json, status, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,'novo',?)""",
-            (session.get("customer_id"), name, phone, address, delivery, fee, payment, total, items_json, now),
+            "INSERT INTO orders (customer_id, customer_name, customer_phone, address, "
+            "delivery_method, delivery_fee, payment_method, total, items_json, status, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (session.get("customer_id"), name, phone, address, delivery, fee, payment, total, items_json, "novo", now),
         )
-        # baixa estoque
         for i in items:
             conn.execute(
                 "UPDATE products SET stock = MAX(0, stock - ?) WHERE id=?",
@@ -687,24 +726,80 @@ def checkout():
         conn.commit()
         conn.close()
         session["cart"] = {}
+        session["cart_colors"] = {}
 
-        # monta mensagem WhatsApp
-        lines = [f"• {i['product']['name']} ({i['product']['color'] or '-'}) x{i['qty']} = R$ {i['subtotal']:.2f}" for i in items]
+        lines = [
+            "• %s (%s) x%d = R$ %.2f"
+            % (
+                i["product"]["name"],
+                i.get("chosen_color") or "-",
+                i["qty"],
+                i["subtotal"],
+            )
+            for i in items
+        ]
         delivery_txt = "Uber Flex (+R$ 5,00)" if delivery == "uber" else "Retirada"
-        msg = (
-            f"Olá! Pedido YOB_Crochê 🧶\n\n"
-            f"*Cliente:* {name}\n*WhatsApp:* {phone}\n*Endereço:* {address or 'A combinar'}\n\n"
-            f"*Pedido:*\n" + "\n".join(lines) +
-            f"\n\n*Entrega:* {delivery_txt}\n*Total: R$ {total:.2f}*\n"
-            f"*Pagamento:* {'Pix' if payment == 'pix' else 'Combinar no WhatsApp'}\n\nAguardo confirmação! 💜"
+        pay_map = {
+            "avista": "À vista / Pix (com desconto)",
+            "pix": "Pix",
+            "whatsapp": "Combinar no WhatsApp",
+        }
+        pay_txt = pay_map.get(payment, payment)
+        nl = chr(10)
+        receipt_text = (
+            "COMPROVANTE YOB_Crochê" + nl
+            + "Cliente: " + name + nl
+            + "WhatsApp: " + phone + nl
+            + "E-mail: " + (email or "-") + nl
+            + "Endereço: " + (address or "A combinar") + nl
+            + "--------------------" + nl
+            + nl.join(lines) + nl
+            + "--------------------" + nl
+            + ("Subtotal: R$ %.2f" % subtotal) + nl
+            + "Entrega: " + delivery_txt + nl
+            + ("Desconto: R$ %.2f" % discount) + nl
+            + ("TOTAL: R$ %.2f" % total) + nl
+            + "Pagamento: " + pay_txt + nl
+            + "Obrigada pela preferência!" + nl
+            + "YOB_Crochê"
         )
-        wa_url = f"https://wa.me/{WHATSAPP}?text=" + __import__("urllib.parse").parse.quote(msg)
-        return render_template("success.html", name=name, total=total, wa_url=wa_url, customer=name)
+        msg = (
+            "Olá! Pedido YOB_Crochê 🧶" + nl + nl
+            + "*Cliente:* " + name + nl
+            + "*WhatsApp:* " + phone + nl
+            + "*Endereço:* " + (address or "A combinar") + nl + nl
+            + "*Pedido:*" + nl + nl.join(lines) + nl + nl
+            + "*Entrega:* " + delivery_txt + nl
+            + ("*Desconto:* R$ %.2f" % discount) + nl
+            + ("*Total: R$ %.2f*" % total) + nl
+            + "*Pagamento:* " + pay_txt + nl + nl
+            + "Aguardo confirmação! 💜"
+        )
+        wa_url = "https://wa.me/%s?text=%s" % (
+            WHATSAPP,
+            __import__("urllib.parse").parse.quote(msg),
+        )
+        email_url = None
+        if email:
+            subject = __import__("urllib.parse").parse.quote("Comprovante YOB_Crochê")
+            body = __import__("urllib.parse").parse.quote(receipt_text)
+            email_url = "mailto:%s?subject=%s&body=%s" % (email, subject, body)
+        return render_template(
+            "success.html",
+            name=name,
+            total=total,
+            wa_url=wa_url,
+            customer=name,
+            receipt_text=receipt_text,
+            msg=msg,
+            email_url=email_url,
+        )
 
     conn.close()
     return render_template(
         "checkout.html", items=items, subtotal=subtotal, fee=0, total=subtotal,
-        cart_count=sum(cart.values()), customer=session.get("customer_name"),
+        cart_count=sum(int(v or 0) for v in cart.values()) if cart else 0,
+        customer=session.get("customer_name"),
         customer_contact=session.get("customer_contact"),
     )
 
@@ -993,6 +1088,124 @@ try:
     init_db()
 except Exception as e:
     print("AVISO init_db:", e)
+
+
+
+
+@app.route("/admin/backup/export")
+@admin_required
+def admin_backup_export():
+    """Baixa JSON com produtos, pedidos e clientes (backup)."""
+    import json
+    from flask import Response
+    conn = get_db()
+    products = [dict(r) for r in conn.execute("SELECT * FROM products").fetchall()]
+    try:
+        orders = [dict(r) for r in conn.execute("SELECT * FROM orders").fetchall()]
+    except Exception:
+        orders = []
+    try:
+        customers = [dict(r) for r in conn.execute("SELECT id,name,contact,contact_type,created_at FROM customers").fetchall()]
+    except Exception:
+        customers = []
+    conn.close()
+    payload = {
+        "app": "YOB_Croche",
+        "exported_at": datetime.now().isoformat(),
+        "products": products,
+        "orders": orders,
+        "customers": customers,
+    }
+    data = json.dumps(payload, ensure_ascii=False, indent=2)
+    fname = f"yob_backup_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
+    return Response(
+        data,
+        mimetype="application/json",
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
+    )
+
+
+@app.route("/admin/backup/import", methods=["POST"])
+@admin_required
+def admin_backup_import():
+    """Restaura produtos a partir de JSON de backup."""
+    import json
+    f = request.files.get("backup")
+    if not f or not f.filename:
+        flash("Selecione um arquivo JSON de backup")
+        return redirect(url_for("admin"))
+    try:
+        raw = f.read().decode("utf-8")
+        data = json.loads(raw)
+    except Exception as e:
+        flash(f"Arquivo inválido: {e}")
+        return redirect(url_for("admin"))
+    products = data.get("products") or []
+    if not products:
+        flash("Backup sem produtos")
+        return redirect(url_for("admin"))
+    conn = get_db()
+    # Garante coluna cost
+    try:
+        conn.execute("ALTER TABLE products ADD COLUMN cost REAL")
+        conn.commit()
+    except Exception:
+        pass
+    restored = 0
+    for p in products:
+        name = (p.get("name") or "").strip()
+        if not name:
+            continue
+        category = p.get("category") or "Acessórios"
+        color = p.get("color") or ""
+        price = float(p.get("price") or 0)
+        cost = p.get("cost")
+        stock = int(p.get("stock") or 0)
+        description = p.get("description") or ""
+        image = p.get("image")
+        active = 1 if p.get("active", 1) in (1, True, "1") else 0
+        created = p.get("created_at") or datetime.now().isoformat()
+        # evita duplicar pelo mesmo nome+cor+preço se já existir
+        exists = conn.execute(
+            "SELECT id FROM products WHERE name=? AND ifnull(color,'')=? AND price=?",
+            (name, color, price),
+        ).fetchone()
+        if exists:
+            conn.execute(
+                """UPDATE products SET category=?, stock=?, description=?, image=COALESCE(?, image),
+                   active=?, cost=? WHERE id=?""",
+                (category, stock, description, image, active, cost, exists["id"]),
+            )
+        else:
+            try:
+                conn.execute(
+                    """INSERT INTO products (name,category,color,price,cost,stock,description,image,active,created_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    (name, category, color, price, cost, stock, description, image, active, created),
+                )
+            except Exception:
+                conn.execute(
+                    """INSERT INTO products (name,category,color,price,stock,description,image,active,created_at)
+                       VALUES (?,?,?,?,?,?,?,?,?)""",
+                    (name, category, color, price, stock, description, image, active, created),
+                )
+        restored += 1
+    conn.commit()
+    conn.close()
+    flash(f"Backup restaurado: {restored} produto(s)")
+    return redirect(url_for("admin"))
+
+
+@app.route("/api/products")
+def api_products():
+    try:
+        conn = get_db()
+        rows = conn.execute("SELECT id,name,category,color,price,description,active FROM products WHERE active=1 OR active IS NULL ORDER BY id DESC").fetchall()
+        conn.close()
+        products = [dict(r) for r in rows]
+        return jsonify({"products": products})
+    except Exception as e:
+        return jsonify({"products": [], "error": str(e)})
 
 
 @app.route("/health")
